@@ -1,26 +1,173 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+:root,
+html[data-theme="light"] {
+  color-scheme: light;
+  --deep-purple: #4b1d94;
+  --violet: #7b39ec;
+  --lavender: #a78af9;
+  --lavender-soft: #efe8ff;
+  --violet-soft: #f3edff;
+  --background: #f3f2f8;
+  --surface: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --muted-bg: #f3f4f6;
+  --border: #e8e6ef;
+  --input-bg: #f3f6ff;
+  --panel-soft: #f7f5ff;
+  --success: #22c55e;
+  --success-soft: #e8f9ef;
+  --danger: #ef4444;
+  --danger-soft: #feecec;
+  --warning: #f59e0b;
+  --warning-soft: #fff7e8;
+  --info: #3b82f6;
+  --info-soft: #ebf3ff;
+  --card-radius: 10px;
+  --card-shadow: 0 1px 3px rgba(31, 41, 55, 0.06), 0 1px 2px rgba(31, 41, 55, 0.04);
+  --foreground: var(--text);
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --progress-track: #efeafc;
+  --progress-track-inner: #e8e1f8;
+  --btn-primary-bg: #7b39ec;
+  --btn-primary-text: #ffffff;
+  --btn-outline-border: #7b39ec;
+  --btn-outline-text: #7b39ec;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --deep-purple: #ddd6fe;
+  --violet: #8b5cf6;
+  --lavender: #a78bfa;
+  --lavender-soft: #2a2042;
+  --violet-soft: #221a38;
+  --background: #0b0914;
+  --surface: #151124;
+  --text: #f5f3ff;
+  --muted: #9d95b5;
+  --muted-bg: #1c1730;
+  --border: #2c2542;
+  --input-bg: #1c1730;
+  --panel-soft: #1c1730;
+  --success: #34d399;
+  --success-soft: #123528;
+  --danger: #f87171;
+  --danger-soft: #3a1b24;
+  --warning: #fbbf24;
+  --warning-soft: #3a2d14;
+  --info: #60a5fa;
+  --info-soft: #17283f;
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --header-bg: rgba(21, 17, 36, 0.92);
+  --progress-track: #241c3d;
+  --progress-track-inner: #2a2148;
+  --btn-primary-bg: #8b5cf6;
+  --btn-primary-text: #ffffff;
+  --btn-outline-border: #a78bfa;
+  --btn-outline-text: #c4b5fd;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-heading);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
 }
 
 body {
+  margin: 0;
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text);
+  font-family: var(--font-body), system-ui, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading), system-ui, sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+/* Do not set color:inherit on buttons — it overrides Tailwind text-* utilities
+   (unlayered CSS beats @layer utilities) and makes primary button labels invisible. */
+input,
+textarea,
+select {
+  color: inherit;
+  background: transparent;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+@keyframes progress-shine {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes progress-stripes-move {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 28px 0;
+  }
+}
+
+.progress-fill {
+  background: linear-gradient(
+    90deg,
+    #4b1d94 0%,
+    #6d28d9 35%,
+    #7b39ec 65%,
+    #a78af9 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 14px rgba(123, 57, 236, 0.28);
+}
+
+.progress-shine {
+  background: linear-gradient(
+    110deg,
+    transparent 28%,
+    rgba(255, 255, 255, 0.45) 48%,
+    transparent 68%
+  );
+  animation: progress-shine 2.2s ease-in-out infinite;
+}
+
+.progress-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.22) 0 6px,
+    transparent 6px 12px
+  );
+  background-size: 28px 28px;
+  animation: progress-stripes-move 1s linear infinite;
 }
