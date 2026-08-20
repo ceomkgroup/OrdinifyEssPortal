@@ -6,6 +6,7 @@ import {
   getAttendanceHistory,
   getAttendanceMonthlySummary,
   getAttendanceToday,
+  resolveAttendanceLogId,
 } from "@/api/attendance";
 import { useModules } from "@/components/modules/ModulesProvider";
 
@@ -201,7 +202,7 @@ export function useAttendanceLive() {
         return;
       }
       setToday({
-        logId: data.logId,
+        logId: resolveAttendanceLogId(data) || data.logId,
         checkInTime: data.checkInTime,
         checkOutTime: null,
         isCheckedIn: true,
@@ -224,7 +225,7 @@ export function useAttendanceLive() {
       }
       setToday((prev) => ({
         ...(prev || {}),
-        logId: data.logId ?? prev?.logId,
+        logId: resolveAttendanceLogId(data) || data.logId || prev?.logId,
         checkInTime: data.checkInTime ?? prev?.checkInTime,
         checkOutTime: data.checkOutTime ?? data.checkOutAt ?? new Date().toISOString(),
         isCheckedIn: false,
@@ -261,7 +262,7 @@ export function useAttendanceLive() {
           return {
             ...base,
             ...data,
-            logId: data.logId ?? base.logId,
+            logId: resolveAttendanceLogId(data) || data.logId || base.logId,
             isCheckedIn: true,
             isCheckedOut: false,
             isOnBreak: true,
@@ -282,7 +283,7 @@ export function useAttendanceLive() {
         return {
           ...base,
           ...data,
-          logId: data.logId ?? base.logId,
+          logId: resolveAttendanceLogId(data) || data.logId || base.logId,
           isCheckedIn: true,
           isCheckedOut: false,
           isOnBreak: false,

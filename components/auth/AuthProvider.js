@@ -27,7 +27,7 @@ import {
   setAuthSession,
 } from "@/lib/auth-storage";
 import { clearPortalCaches } from "@/api/portal";
-import { Spinner } from "@/components/ui/Spinner";
+import { FullScreenLoader } from "@/components/ui/Spinner";
 
 const AuthContext = createContext(null);
 const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
@@ -303,19 +303,11 @@ export function AuthProvider({ children }) {
   );
 
   if (bootstrapping) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
-        <Spinner />
-      </div>
-    );
+    return <FullScreenLoader label="Loading" hint="Starting Ordinify…" />;
   }
 
   if (!hasToken && !isPublic) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
-        <Spinner />
-      </div>
-    );
+    return <FullScreenLoader label="Signing you in" hint="Checking your session…" />;
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

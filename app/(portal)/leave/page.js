@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/ui/ComingSoon";
+import { LeaveView } from "@/components/leave/LeaveView";
 
 export default function LeavePage() {
-  return <ComingSoon title="Leave" />;
+  return <LeaveView />;
 }

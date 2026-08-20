@@ -23,12 +23,32 @@ function toApiError(err, fallbackMessage) {
   return err;
 }
 
+/** Resolve attendance log id from today / check-in payloads. */
+export function resolveAttendanceLogId(source) {
+  if (!source) return null;
+  if (typeof source === "string" || typeof source === "number") {
+    return String(source);
+  }
+  return (
+    source.logId ||
+    source.attendanceLogId ||
+    source.attendanceId ||
+    source.id ||
+    null
+  );
+}
+
 /** Today's attendance log (null when not checked in). */
 export async function getAttendanceToday() {
   const { data } = await api.get("/api/employee/portal/attendance/today");
   const body = unwrap(data, "Failed to load today's attendance");
+  const today = body.data ?? null;
+  if (today && !today.logId) {
+    const logId = resolveAttendanceLogId(today);
+    if (logId) today.logId = logId;
+  }
   return {
-    today: body.data ?? null,
+    today,
     message: body.message || "",
   };
 }
@@ -62,6 +82,36 @@ export async function getAttendanceHistory({
     rows: Array.isArray(body.data) ? body.data : [],
     meta: body.meta || { total: 0, page: 1, limit, totalPages: 1 },
   };
+}
+
+/**
+ * Fetch all history rows for a date range (pages through API).
+ * Used for CSV export and status filters that need the full month.
+ */
+export async function getAttendanceHistoryAll({
+  from,
+  to,
+  pageSize = 100,
+  maxPages = 50,
+} = {}) {
+  let page = 1;
+  let totalPages = 1;
+  const rows = [];
+
+  while (page <= totalPages && page <= maxPages) {
+    const res = await getAttendanceHistory({
+      from,
+      to,
+      page,
+      limit: pageSize,
+    });
+    rows.push(...(res.rows || []));
+    totalPages = Math.max(1, Number(res.meta?.totalPages) || 1);
+    if (!res.rows?.length) break;
+    page += 1;
+  }
+
+  return rows;
 }
 
 /**
@@ -108,7 +158,8 @@ export async function checkInAttendance(payload) {
  * Body: latitude?, longitude? (GPS only when geofence is active)
  */
 export async function checkOutAttendance(logId, payload = {}) {
-  if (!logId) {
+  const id = resolveAttendanceLogId(logId);
+  if (!id) {
     const err = new Error("Missing attendance log. Please refresh and try again.");
     err.code = "MISSING_LOG_ID";
     throw err;
@@ -116,8 +167,8 @@ export async function checkOutAttendance(logId, payload = {}) {
 
   try {
     const { data } = await api.patch(
-      `/api/employee/portal/attendance/${logId}/check-out`,
-      payload
+      `/api/employee/portal/attendance/${id}/check-out`,
+      payload || {}
     );
     return unwrap(data, "Check-out failed");
   } catch (err) {
@@ -128,9 +179,11 @@ export async function checkOutAttendance(logId, payload = {}) {
 /**
  * Start break (go on break).
  * PATCH /attendance/{logId}/break-out
+ * Empty JSON body required — some servers 500 on body-less PATCH + application/json.
  */
-export async function breakOutAttendance(logId) {
-  if (!logId) {
+export async function breakOutAttendance(logId, payload = {}) {
+  const id = resolveAttendanceLogId(logId);
+  if (!id) {
     const err = new Error("Missing attendance log. Please refresh and try again.");
     err.code = "MISSING_LOG_ID";
     throw err;
@@ -138,7 +191,8 @@ export async function breakOutAttendance(logId) {
 
   try {
     const { data } = await api.patch(
-      `/api/employee/portal/attendance/${logId}/break-out`
+      `/api/employee/portal/attendance/${id}/break-out`,
+      payload || {}
     );
     return unwrap(data, "Unable to start break");
   } catch (err) {
@@ -150,8 +204,9 @@ export async function breakOutAttendance(logId) {
  * End break (return from break).
  * PATCH /attendance/{logId}/break-in
  */
-export async function breakInAttendance(logId) {
-  if (!logId) {
+export async function breakInAttendance(logId, payload = {}) {
+  const id = resolveAttendanceLogId(logId);
+  if (!id) {
     const err = new Error("Missing attendance log. Please refresh and try again.");
     err.code = "MISSING_LOG_ID";
     throw err;
@@ -159,7 +214,8 @@ export async function breakInAttendance(logId) {
 
   try {
     const { data } = await api.patch(
-      `/api/employee/portal/attendance/${logId}/break-in`
+      `/api/employee/portal/attendance/${id}/break-in`,
+      payload || {}
     );
     return unwrap(data, "Unable to end break");
   } catch (err) {
@@ -205,10 +261,11 @@ export function getPunchGeoPosition({ timeout = 15000 } = {}) {
 }
 
 export function formatPunchError(err) {
-  const code = err?.code;
   const data = err?.data || {};
+  const code =
+    err?.code || data?.code || data?.error || data?.data?.error || null;
   const status = err?.status;
-  const message = String(err?.message || "").toLowerCase();
+  const message = String(err?.message || data?.message || "").toLowerCase();
 
   if (code === "OUTSIDE_GEOFENCE") {
     const distance = data.distanceMeters;
@@ -244,11 +301,31 @@ export function formatPunchError(err) {
   }
 
   if (code === "MODULE_DISABLED") {
-    return err.message || "This module is not enabled for your company.";
+    const moduleName = data?.module || data?.data?.module;
+    if (moduleName === "breakManagement") {
+      return (
+        err.message ||
+        data?.message ||
+        "Break management is not enabled for your company."
+      );
+    }
+    return err.message || data?.message || "This module is not enabled for your company.";
   }
 
   if (code === "INVALID_TRANSITION") {
-    return err.message || "This action is not allowed in your current attendance state.";
+    return (
+      err.message ||
+      data?.message ||
+      "This action is not allowed in your current attendance state."
+    );
+  }
+
+  if (status === 500) {
+    return (
+      err.message ||
+      data?.message ||
+      "Server error while updating attendance. Please try again."
+    );
   }
 
   if (

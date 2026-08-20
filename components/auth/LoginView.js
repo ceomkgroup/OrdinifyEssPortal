@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { OrdinifyLogo } from "@/components/ui/OrdinifyLogo";
 import { Button } from "@/components/ui/Button";
+import { FlashBanner } from "@/components/ui/FlashBanner";
+import { LogoLoader } from "@/components/ui/Spinner";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 const FEATURES = [
@@ -162,9 +164,14 @@ export function LoginView() {
             </div>
 
             {error ? (
-              <p className="rounded-[10px] bg-[var(--danger-soft)] px-3 py-2.5 text-[13px] text-[var(--danger)]">
-                {error}
-              </p>
+              <FlashBanner
+                message={error}
+                tone="danger"
+                compact
+                className="rounded-[10px]"
+                duration={5000}
+                onDismiss={() => setError("")}
+              />
             ) : null}
 
             <Button
@@ -172,7 +179,14 @@ export function LoginView() {
               className="h-12 w-full rounded-[10px] text-[15px] font-semibold shadow-[0_10px_24px_rgba(123,57,236,0.28)]"
               disabled={authLoading}
             >
-              {authLoading ? "Logging in..." : "Login"}
+              {authLoading ? (
+                <>
+                  <LogoLoader size="xs" />
+                  Signing in…
+                </>
+              ) : (
+                "Login"
+              )}
             </Button>
           </form>
 

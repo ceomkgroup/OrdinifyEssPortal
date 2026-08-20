@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { AttendanceChangeView } from "@/components/requests/AttendanceChangeView";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { ComingSoon } from "@/components/ui/ComingSoon";
-import { Spinner } from "@/components/ui/Spinner";
+import { PageLoader } from "@/components/ui/Spinner";
 import { useDashboard } from "@/hooks/useDashboard";
 
 function AttendanceChangeContent() {
@@ -15,6 +15,7 @@ function AttendanceChangeContent() {
   if (!hasScreen("attendanceChange")) {
     return (
       <ComingSoon
+        badge="Unavailable"
         title="Attendance Change"
         description="Attendance change is not enabled for your company."
       />
@@ -31,13 +32,7 @@ function AttendanceChangeContent() {
 
 export default function AttendanceChangePage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-[40vh] items-center justify-center">
-          <Spinner />
-        </div>
-      }
-    >
+    <Suspense fallback={<PageLoader label="Loading" hint="Opening attendance change…" />}>
       <AttendanceChangeContent />
     </Suspense>
   );

@@ -14,7 +14,7 @@ import { LastPayslipBar } from "@/components/dashboard/LastPayslipBar";
 import { CompanySettingsCard } from "@/components/dashboard/CompanySettingsCard";
 import { PunchWidget } from "@/components/dashboard/PunchWidget";
 import { Button } from "@/components/ui/Button";
-import { Spinner } from "@/components/ui/Spinner";
+import { PageLoader } from "@/components/ui/Spinner";
 import { useDashboard } from "@/hooks/useDashboard";
 import { useAttendanceLive } from "@/hooks/useAttendance";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -38,11 +38,7 @@ export function DashboardView() {
   } = useAttendanceLive();
 
   if (loading && !data) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Spinner />
-      </div>
-    );
+    return <PageLoader label="Loading dashboard" hint="Pulling your day overview…" />;
   }
 
   if ((error || !data) && !loading) {

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useModules } from "@/components/modules/ModulesProvider";
-import { Spinner } from "@/components/ui/Spinner";
+import { PageLoader } from "@/components/ui/Spinner";
 
 export function ModuleRouteGuard({ children }) {
   const pathname = usePathname();
@@ -21,17 +21,20 @@ export function ModuleRouteGuard({ children }) {
 
   if (loading && !modules) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Spinner />
-      </div>
+      <PageLoader
+        label="Loading modules"
+        hint="Checking what is enabled for your company…"
+      />
     );
   }
 
   if (modules && !allowed) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Spinner />
-      </div>
+      <PageLoader
+        compact
+        label="Redirecting"
+        hint="Taking you back to the dashboard…"
+      />
     );
   }
 

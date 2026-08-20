@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import {
   Banknote,
   BriefcaseBusiness,
+  CalendarClock,
   Clock3,
   Coins,
   FileStack,
@@ -13,6 +15,7 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { useModules } from "@/components/modules/ModulesProvider";
+import { getRequestTypeByKey } from "@/lib/request-types";
 
 const REQUESTS = [
   { key: "leave", label: "Leave", icon: Palmtree, tone: "bg-[var(--info-soft)] text-[var(--info)]" },
@@ -24,6 +27,7 @@ const REQUESTS = [
   { key: "loans", label: "Loans", icon: Banknote, tone: "bg-[var(--success-soft)] text-[var(--success)]" },
   { key: "advances", label: "Advances", icon: Coins, tone: "bg-[var(--warning-soft)] text-[var(--warning)]" },
   { key: "encashment", label: "Encashment", icon: FileStack, tone: "bg-[var(--lavender-soft)] text-[var(--violet)]" },
+  { key: "attendanceChange", label: "Attendance", icon: CalendarClock, tone: "bg-[var(--info-soft)] text-[var(--info)]" },
 ];
 
 export function PendingRequestsCard({ pendingRequests }) {
@@ -44,10 +48,12 @@ export function PendingRequestsCard({ pendingRequests }) {
       <div className="grid grid-cols-3 gap-2.5">
         {tiles.map(({ key, label, icon: Icon, tone }) => {
           const count = pendingRequests[key] ?? 0;
+          const href = getRequestTypeByKey(key)?.href || "/requests";
           return (
-            <div
+            <Link
               key={key}
-              className="flex flex-col items-center gap-1.5 rounded-lg bg-[var(--panel-soft)] px-1.5 py-2.5 text-center"
+              href={href}
+              className="flex flex-col items-center gap-1.5 rounded-lg bg-[var(--panel-soft)] px-1.5 py-2.5 text-center transition hover:bg-[var(--lavender-soft)]"
             >
               <span
                 className={`flex h-8 w-8 items-center justify-center rounded-full ${tone}`}
@@ -56,7 +62,7 @@ export function PendingRequestsCard({ pendingRequests }) {
               </span>
               <p className="text-[10px] leading-tight text-[var(--muted)]">{label}</p>
               <p className="text-[13px] font-bold text-[var(--text)]">{count}</p>
-            </div>
+            </Link>
           );
         })}
       </div>

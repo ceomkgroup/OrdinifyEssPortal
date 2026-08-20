@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
@@ -8,17 +8,31 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Coffee,
+  Download,
   FilePenLine,
+  LogIn,
+  LogOut,
   MapPin,
   MoreVertical,
   RefreshCw,
+  Timer,
 } from "lucide-react";
+import { getAttendanceHistoryAll } from "@/api/attendance";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Spinner } from "@/components/ui/Spinner";
+import { FlashBanner } from "@/components/ui/FlashBanner";
+import { PageLoader, LogoLoader } from "@/components/ui/Spinner";
 import { useAttendancePage } from "@/hooks/useAttendance";
 import { useModules } from "@/components/modules/ModulesProvider";
+import {
+  STATUS_FILTERS,
+  attendanceRowsToCsv,
+  downloadCsv,
+  filterAttendanceByStatus,
+  monthRange,
+} from "@/lib/attendance-history";
 import {
   formatDate,
   formatHoursMinutes,
@@ -41,11 +55,21 @@ const MONTH_OPTIONS = [
   "December",
 ];
 
-function Stat({ label, value, tone = "text-[var(--text)]" }) {
+function Stat({ label, value, tone = "text-[var(--text)]", hint }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-3 text-center">
-      <p className={`text-[18px] font-bold tabular-nums ${tone}`}>{value ?? "—"}</p>
-      <p className="mt-1 text-[11px] text-[var(--muted)]">{label}</p>
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+        {label}
+      </p>
+      <p
+        className={`mt-1 truncate text-[16px] font-bold tabular-nums leading-tight ${tone}`}
+        title={value != null ? String(value) : undefined}
+      >
+        {value ?? "—"}
+      </p>
+      {hint ? (
+        <p className="mt-1 text-[10px] text-[var(--muted)]">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -53,6 +77,15 @@ function Stat({ label, value, tone = "text-[var(--text)]" }) {
 function shiftPeriod(year, month, delta) {
   const d = new Date(year, month - 1 + delta, 1);
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
+}
+
+function pickNumber(...values) {
+  for (const value of values) {
+    if (value == null || value === "") continue;
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
 }
 
 function HistoryRowActions({ logId }) {
@@ -174,19 +207,131 @@ export function AttendanceView() {
     refetch,
   } = useAttendancePage();
 
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [monthRows, setMonthRows] = useState([]);
+  const [monthRowsLoading, setMonthRowsLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [filterError, setFilterError] = useState("");
+
   const showGeofence = geofenceEnabled && Boolean(geofence);
-  const total = Number(meta?.total) || 0;
-  const currentPage = Number(meta?.page) || page;
+  const filterActive = statusFilter !== "all";
+
+  useEffect(() => {
+    let alive = true;
+
+    if (!filterActive) {
+      queueMicrotask(() => {
+        if (!alive) return;
+        setMonthRows([]);
+        setMonthRowsLoading(false);
+        setFilterError("");
+      });
+      return () => {
+        alive = false;
+      };
+    }
+
+    queueMicrotask(() => {
+      if (alive) {
+        setMonthRowsLoading(true);
+        setFilterError("");
+      }
+    });
+
+    (async () => {
+      try {
+        const { from, to } = monthRange(year, month);
+        const rows = await getAttendanceHistoryAll({ from, to });
+        if (!alive) return;
+        setMonthRows(rows);
+      } catch (err) {
+        if (!alive) return;
+        setMonthRows([]);
+        setFilterError(err.message || "Failed to load filtered history");
+      } finally {
+        if (alive) setMonthRowsLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [filterActive, year, month]);
+
+  const filteredMonthRows = useMemo(
+    () => filterAttendanceByStatus(monthRows, statusFilter),
+    [monthRows, statusFilter]
+  );
+
+  const displayRows = filterActive
+    ? filteredMonthRows.slice((page - 1) * limit, page * limit)
+    : history;
+
+  const total = filterActive
+    ? filteredMonthRows.length
+    : Number(meta?.total) || 0;
+  const currentPage = filterActive ? page : Number(meta?.page) || page;
   const pageLimit = Number(meta?.limit) || limit;
-  const totalPages = Math.max(1, Number(meta?.totalPages) || 1);
+  const totalPages = filterActive
+    ? Math.max(1, Math.ceil(total / pageLimit) || 1)
+    : Math.max(1, Number(meta?.totalPages) || 1);
   const fromRow = total === 0 ? 0 : (currentPage - 1) * pageLimit + 1;
   const toRow = Math.min(currentPage * pageLimit, total);
+  const listLoading = historyLoading || (filterActive && monthRowsLoading);
+
+  const todayWorkingHours = pickNumber(
+    today?.workingHours,
+    today?.workedHours,
+    today?.totalWorkingHours
+  );
+  const todayBreakMinutes = pickNumber(
+    today?.breakMinutes,
+    today?.totalBreakMinutes,
+    today?.usedBreakMinutes
+  );
+  const todayBreaksUsed = pickNumber(
+    today?.breaksUsed,
+    today?.breakCount,
+    today?.completedBreakCount
+  );
+  const todayMaxBreaks = pickNumber(
+    today?.maxBreaks,
+    today?.allowedBreaks,
+    today?.maxBreakCount
+  );
+
+  const historyColSpan =
+    8 + (breakEnabled ? 1 : 0) + (canRequestChange ? 1 : 0) + 2;
+
+  function onStatusFilterChange(next) {
+    setStatusFilter(next);
+    setPage(1);
+  }
+
+  const handleExportCsv = useCallback(async () => {
+    setExporting(true);
+    setFilterError("");
+    try {
+      const { from, to } = monthRange(year, month);
+      const rows = await getAttendanceHistoryAll({ from, to });
+      const filtered = filterAttendanceByStatus(rows, statusFilter);
+      const csv = attendanceRowsToCsv(filtered, { includeBreak: breakEnabled });
+      const filterPart =
+        statusFilter === "all" ? "all" : statusFilter.toLowerCase();
+      downloadCsv(
+        `attendance-${year}-${String(month).padStart(2, "0")}-${filterPart}.csv`,
+        csv
+      );
+    } catch (err) {
+      setFilterError(err.message || "Failed to export CSV");
+    } finally {
+      setExporting(false);
+    }
+  }, [year, month, statusFilter, breakEnabled]);
 
   if (loading && !summary && !today) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Spinner />
-      </div>
+      <PageLoader label="Loading attendance" hint="Fetching today’s status and month summary…" />
     );
   }
 
@@ -259,80 +404,122 @@ export function AttendanceView() {
       </div>
 
       {error ? (
-        <p className="rounded-xl bg-[var(--danger-soft)] px-3 py-2.5 text-sm text-[var(--danger)]">
-          {error}
-        </p>
+        <FlashBanner
+          message={error}
+          tone="danger"
+          duration={5000}
+          autoDismiss={false}
+        />
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card title="Today">
+      <div
+        className={`grid gap-4 ${
+          showGeofence ? "xl:grid-cols-[1.35fr_0.9fr]" : ""
+        }`}
+      >
+        <Card title="Today" bodyClassName="space-y-3">
           {!today ? (
-            <div className="flex min-h-[140px] flex-col items-center justify-center text-center">
+            <div className="flex min-h-[150px] flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] text-center">
               <Clock3 className="h-10 w-10 text-[var(--muted)]" strokeWidth={1.4} />
               <p className="mt-3 text-[14px] font-semibold text-[var(--text)]">
                 Not checked in today
               </p>
-              <p className="mt-1 text-[12px] text-[var(--muted)]">
+              <p className="mt-1 max-w-sm text-[12px] text-[var(--muted)]">
                 {todayMessage || "Punch in when your shift starts."}
               </p>
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Stat
-                label="Status"
-                value={today.attTypeName || (today.isCheckedIn ? "Checked In" : "—")}
-                tone="text-[var(--violet)]"
-              />
-              <Stat
-                label="Check In"
-                value={formatTime(today.checkInTime)}
-              />
-              <Stat
-                label="Check Out"
-                value={formatTime(today.checkOutTime)}
-              />
-              <Stat label="Shift" value={today.shiftName || "—"} />
-              <Stat
-                label="Late (min)"
-                value={today.lateMinutes ?? 0}
-                tone={
-                  Number(today.lateMinutes) > 0
-                    ? "text-[var(--warning)]"
-                    : "text-[var(--success)]"
-                }
-              />
-              {breakEnabled ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-[var(--success-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--success)]">
+                  {today.attTypeName ||
+                    (today.isCheckedIn ? "Checked In" : "Present")}
+                </span>
+                {today.isCheckedOut ? (
+                  <span className="rounded-full bg-[var(--lavender-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--violet)]">
+                    Checked Out
+                  </span>
+                ) : today.isCheckedIn ? (
+                  <span className="rounded-full bg-[var(--info-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--info)]">
+                    Checked In
+                  </span>
+                ) : null}
+                {breakEnabled && today.isOnBreak ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--warning)]">
+                    <Coffee className="h-3.5 w-3.5" />
+                    On Break
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                 <Stat
-                  label="On Break"
-                  value={today.isOnBreak ? "Yes" : "No"}
+                  label="Shift"
+                  value={today.shiftName || "—"}
+                  tone="text-[var(--violet)]"
                 />
-              ) : null}
-              {breakEnabled && today.breakMinutes != null ? (
-                <Stat label="Break (min)" value={today.breakMinutes} />
-              ) : null}
-              {breakEnabled &&
-              (today.maxBreaks != null || today.allowedBreaks != null) ? (
                 <Stat
-                  label="Breaks Used"
-                  value={`${today.breaksUsed ?? today.breakCount ?? 0}/${today.maxBreaks ?? today.allowedBreaks}`}
+                  label="Check In"
+                  value={formatTime(today.checkInTime)}
+                  hint={today.isCheckedIn && !today.isCheckedOut ? "Active" : null}
                 />
-              ) : null}
-            </div>
+                <Stat
+                  label="Check Out"
+                  value={formatTime(today.checkOutTime)}
+                  hint={today.isCheckedOut ? "Completed" : "Pending"}
+                />
+                <Stat
+                  label="Late Minutes"
+                  value={today.lateMinutes ?? 0}
+                  tone={
+                    Number(today.lateMinutes) > 0
+                      ? "text-[var(--warning)]"
+                      : "text-[var(--success)]"
+                  }
+                />
+                {todayWorkingHours != null ? (
+                  <Stat
+                    label="Working Hours"
+                    value={formatHoursMinutes(todayWorkingHours)}
+                  />
+                ) : null}
+                {breakEnabled ? (
+                  <Stat
+                    label="On Break"
+                    value={today.isOnBreak ? "Yes" : "No"}
+                  />
+                ) : null}
+                {breakEnabled && todayBreakMinutes != null ? (
+                  <Stat label="Break Minutes" value={todayBreakMinutes} />
+                ) : null}
+                {breakEnabled && todayMaxBreaks != null ? (
+                  <Stat
+                    label="Breaks Used"
+                    value={`${todayBreaksUsed ?? 0}/${todayMaxBreaks}`}
+                  />
+                ) : null}
+              </div>
+            </>
           )}
         </Card>
 
         {showGeofence ? (
           <Card title="Geofence">
             <div className="space-y-3 text-[13px]">
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--violet)]" />
-                <div>
+                <div className="min-w-0">
                   <p className="font-semibold text-[var(--text)]">
                     {geofence.geofence?.name || "Location"}
                   </p>
-                  <p className="mt-0.5 text-[var(--muted)]">
+                  <p className="mt-0.5 text-[12px] text-[var(--muted)]">
                     {geofence.geofence?.address || "—"}
                   </p>
+                  {geofence.geofence?.type ? (
+                    <p className="mt-1 text-[11px] capitalize text-[var(--muted)]">
+                      Type · {geofence.geofence.type}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -363,17 +550,44 @@ export function AttendanceView() {
         action={
           <span className="inline-flex items-center gap-1 text-[11px] text-[var(--muted)]">
             <CalendarDays className="h-3.5 w-3.5" />
-            API summary
+            Selected period
           </span>
         }
       >
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
           <Stat label="Total Days" value={summary?.totalDays ?? 0} />
           <Stat
             label="Present"
-            value={summary?.presentCount ?? 0}
+            value={summary?.presentCount ?? summary?.present ?? 0}
             tone="text-[var(--success)]"
           />
+          {summary?.absentCount != null || summary?.absent != null ? (
+            <Stat
+              label="Absent"
+              value={summary?.absentCount ?? summary?.absent}
+              tone="text-[var(--danger)]"
+            />
+          ) : null}
+          {summary?.leaveCount != null || summary?.leave != null ? (
+            <Stat
+              label="Leave"
+              value={summary?.leaveCount ?? summary?.leave}
+              tone="text-[var(--violet)]"
+            />
+          ) : null}
+          {summary?.holidayCount != null || summary?.holiday != null ? (
+            <Stat
+              label="Holiday"
+              value={summary?.holidayCount ?? summary?.holiday}
+            />
+          ) : null}
+          {summary?.halfDayCount != null || summary?.halfDay != null ? (
+            <Stat
+              label="Half Day"
+              value={summary?.halfDayCount ?? summary?.halfDay}
+              tone="text-[var(--warning)]"
+            />
+          ) : null}
           <Stat
             label="Late Days"
             value={summary?.lateCount ?? 0}
@@ -397,17 +611,14 @@ export function AttendanceView() {
               value={summary?.totalBreakMinutes ?? 0}
             />
           ) : null}
-          <Stat
-            label="Grace Used"
-            value={summary?.graceUsedMinutes ?? 0}
-          />
+          <Stat label="Grace Used" value={summary?.graceUsedMinutes ?? 0} />
         </div>
       </Card>
 
       <Card
         title="Attendance History"
         action={
-          historyLoading ? (
+          listLoading ? (
             <span className="text-[12px] text-[var(--muted)]">Loading…</span>
           ) : (
             <span className="text-[12px] text-[var(--muted)]">
@@ -416,96 +627,233 @@ export function AttendanceView() {
           )
         }
       >
-        <div className="overflow-x-auto">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-1.5">
+            {STATUS_FILTERS.map((item) => {
+              const active = statusFilter === item.value;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => onStatusFilterChange(item.value)}
+                  className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition ${
+                    active
+                      ? "bg-[var(--violet)] text-white"
+                      : "border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 rounded-xl"
+            disabled={exporting || listLoading}
+            onClick={handleExportCsv}
+          >
+            <Download className="h-4 w-4" />
+            {exporting ? "Exporting…" : "Export CSV"}
+          </Button>
+        </div>
+
+        {filterError ? (
+          <p className="mb-3 rounded-lg bg-[var(--danger-soft)] px-3 py-2 text-[12px] text-[var(--danger)]">
+            {filterError}
+          </p>
+        ) : null}
+
+        {filterActive ? (
+          <p className="mb-3 text-[11px] text-[var(--muted)]">
+            Showing {statusFilter} records for{" "}
+            {formatMonthYear(year, month)}
+            {monthRowsLoading ? " · loading month…" : ""}.
+          </p>
+        ) : null}
+
+        <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
           <table className="min-w-full text-left text-[13px]">
             <thead>
-              <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
-                <th className="px-2 py-2.5 font-semibold">Date</th>
-                <th className="px-2 py-2.5 font-semibold">Status</th>
-                <th className="px-2 py-2.5 font-semibold">In</th>
-                <th className="px-2 py-2.5 font-semibold">Out</th>
-                <th className="px-2 py-2.5 font-semibold">Shift</th>
-                <th className="px-2 py-2.5 font-semibold">Hours</th>
-                <th className="px-2 py-2.5 font-semibold">Late</th>
-                <th className="px-2 py-2.5 font-semibold">Source</th>
+              <tr className="border-b border-[var(--border)] bg-[var(--panel-soft)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
+                <th className="px-3 py-2.5 font-semibold">Date</th>
+                <th className="px-3 py-2.5 font-semibold">Status</th>
+                <th className="px-3 py-2.5 font-semibold">Check In</th>
+                <th className="px-3 py-2.5 font-semibold">Check Out</th>
+                <th className="px-3 py-2.5 font-semibold">Shift</th>
+                <th className="px-3 py-2.5 font-semibold">Working Hours</th>
+                <th className="px-3 py-2.5 font-semibold">Overtime</th>
+                <th className="px-3 py-2.5 font-semibold">Late</th>
+                <th className="px-3 py-2.5 font-semibold">Early Exit</th>
+                {breakEnabled ? (
+                  <th className="px-3 py-2.5 font-semibold">Break</th>
+                ) : null}
+                <th className="px-3 py-2.5 font-semibold">Source</th>
                 {canRequestChange ? (
-                  <th className="px-2 py-2.5 font-semibold">Action</th>
+                  <th className="px-3 py-2.5 font-semibold">Action</th>
                 ) : null}
               </tr>
             </thead>
             <tbody>
-              {history.length === 0 ? (
+              {displayRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={canRequestChange ? 9 : 8}
-                    className="px-2 py-8 text-center text-[var(--muted)]"
+                    colSpan={historyColSpan}
+                    className="px-3 py-10 text-center text-[var(--muted)]"
                   >
-                    No attendance logs for this period.
+                    {listLoading ? (
+                      <div className="flex flex-col items-center justify-center gap-3 py-2">
+                        <LogoLoader size="sm" />
+                        <span className="text-[12px]">Loading attendance logs…</span>
+                      </div>
+                    ) : filterActive ? (
+                      `No ${statusFilter} records for this month.`
+                    ) : (
+                      "No attendance logs for this period."
+                    )}
                   </td>
                 </tr>
               ) : (
-                history.map((row) => (
-                  <tr
-                    key={row.logId}
-                    className="border-b border-[var(--border)] last:border-0"
-                  >
-                    <td className="px-2 py-3 text-[var(--text)]">
-                      {formatDate(row.attendanceDate)}
-                    </td>
-                    <td className="px-2 py-3">
-                      <span
-                        className="inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
-                        style={{
-                          backgroundColor: `${row.colorCode || "#a78af9"}22`,
-                          color: row.colorCode || "var(--violet)",
-                        }}
-                      >
-                        {row.attTypeName || "—"}
-                      </span>
-                    </td>
-                    <td className="px-2 py-3 text-[var(--text)]">
-                      {formatTime(row.checkInTime)}
-                    </td>
-                    <td className="px-2 py-3 text-[var(--text)]">
-                      {formatTime(row.checkOutTime)}
-                    </td>
-                    <td className="max-w-[140px] truncate px-2 py-3 text-[var(--muted)]">
-                      {row.shiftName || "—"}
-                    </td>
-                    <td className="px-2 py-3 text-[var(--text)]">
-                      {row.workingHours != null
-                        ? formatHoursMinutes(row.workingHours)
-                        : "—"}
-                    </td>
-                    <td className="px-2 py-3 text-[var(--text)]">
-                      {row.lateMinutes ?? "—"}
-                    </td>
-                    <td className="px-2 py-3">
-                      <Badge variant="muted" className="rounded-full capitalize">
-                        {row.punchSource || "—"}
-                      </Badge>
-                    </td>
-                    {canRequestChange ? (
-                      <td className="px-2 py-3">
-                        <HistoryRowActions logId={row.logId} />
+                displayRows.map((row) => {
+                  const late = Number(row.lateMinutes) || 0;
+                  const early = Number(row.earlyExitMinutes) || 0;
+                  const ot = Number(row.overtimeHours) || 0;
+                  const breakMins = pickNumber(
+                    row.breakMinutes,
+                    row.totalBreakMinutes
+                  );
+                  const flags = [
+                    row.isHolidayWork ? "Holiday work" : null,
+                    row.isManualOverride ? "Manual" : null,
+                    row.isMockGps ? "Mock GPS" : null,
+                    row.remarks ? "Remarks" : null,
+                  ].filter(Boolean);
+
+                  return (
+                    <tr
+                      key={row.logId}
+                      className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-soft)]/70"
+                    >
+                      <td className="whitespace-nowrap px-3 py-3 font-medium text-[var(--text)]">
+                        {formatDate(row.attendanceDate)}
                       </td>
-                    ) : null}
-                  </tr>
-                ))
+                      <td className="px-3 py-3">
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className="inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
+                            style={{
+                              backgroundColor: `${row.colorCode || "#a78af9"}22`,
+                              color: row.colorCode || "var(--violet)",
+                            }}
+                          >
+                            {row.attTypeName || row.statusLabel || "—"}
+                          </span>
+                          {flags.length ? (
+                            <span className="text-[10px] text-[var(--muted)]">
+                              {flags.join(" · ")}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
+                        <span className="inline-flex items-center gap-1">
+                          <LogIn className="h-3 w-3 text-[var(--success)]" />
+                          {formatTime(row.checkInTime)}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
+                        <span className="inline-flex items-center gap-1">
+                          <LogOut className="h-3 w-3 text-[var(--violet)]" />
+                          {formatTime(row.checkOutTime)}
+                        </span>
+                      </td>
+                      <td
+                        className="max-w-[150px] truncate px-3 py-3 text-[var(--muted)]"
+                        title={row.shiftName || ""}
+                      >
+                        {row.shiftName || "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
+                        {row.workingHours != null
+                          ? formatHoursMinutes(row.workingHours)
+                          : "—"}
+                      </td>
+                      <td
+                        className={`whitespace-nowrap px-3 py-3 ${
+                          ot > 0
+                            ? "font-semibold text-[var(--violet)]"
+                            : "text-[var(--muted)]"
+                        }`}
+                      >
+                        {row.overtimeHours != null
+                          ? formatHoursMinutes(row.overtimeHours)
+                          : "—"}
+                      </td>
+                      <td
+                        className={`whitespace-nowrap px-3 py-3 tabular-nums ${
+                          late > 0
+                            ? "font-semibold text-[var(--warning)]"
+                            : "text-[var(--muted)]"
+                        }`}
+                      >
+                        {row.lateMinutes != null ? `${late} min` : "—"}
+                      </td>
+                      <td
+                        className={`whitespace-nowrap px-3 py-3 tabular-nums ${
+                          early > 0
+                            ? "font-semibold text-[var(--danger)]"
+                            : "text-[var(--muted)]"
+                        }`}
+                      >
+                        {row.earlyExitMinutes != null ? `${early} min` : "—"}
+                      </td>
+                      {breakEnabled ? (
+                        <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
+                          {breakMins != null ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Coffee className="h-3 w-3 text-[var(--warning)]" />
+                              {Math.round(breakMins)} min
+                              {row.breakCount != null
+                                ? ` · ${row.breakCount}`
+                                : ""}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      ) : null}
+                      <td className="px-3 py-3">
+                        <Badge
+                          variant="muted"
+                          className="rounded-full capitalize"
+                        >
+                          {row.punchSource || "—"}
+                        </Badge>
+                      </td>
+                      {canRequestChange ? (
+                        <td className="px-3 py-3">
+                          <HistoryRowActions logId={row.logId} />
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
 
-        {/* Always show API-style pagination footer from meta */}
         <div className="mt-4 flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[12px] text-[var(--muted)]">
-            Showing <span className="font-semibold text-[var(--text)]">{fromRow}</span>
-            –
+            Showing{" "}
+            <span className="font-semibold text-[var(--text)]">{fromRow}</span>–
             <span className="font-semibold text-[var(--text)]">{toRow}</span> of{" "}
             <span className="font-semibold text-[var(--text)]">{total}</span>
             {" · "}
             limit {pageLimit}
+            {filterActive ? " · filtered" : ""}
           </p>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -528,13 +876,14 @@ export function AttendanceView() {
               type="button"
               variant="outline"
               className="h-9 rounded-lg"
-              disabled={currentPage <= 1 || historyLoading}
+              disabled={currentPage <= 1 || listLoading}
               onClick={() => setPage(Math.max(1, currentPage - 1))}
             >
               Previous
             </Button>
 
-            <span className="min-w-[88px] text-center text-[12px] font-semibold text-[var(--text)]">
+            <span className="inline-flex min-w-[88px] items-center justify-center gap-1 text-[12px] font-semibold text-[var(--text)]">
+              <Timer className="h-3.5 w-3.5 text-[var(--muted)]" />
               {currentPage} / {totalPages}
             </span>
 
@@ -542,7 +891,7 @@ export function AttendanceView() {
               type="button"
               variant="outline"
               className="h-9 rounded-lg"
-              disabled={currentPage >= totalPages || historyLoading}
+              disabled={currentPage >= totalPages || listLoading}
               onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
             >
               Next

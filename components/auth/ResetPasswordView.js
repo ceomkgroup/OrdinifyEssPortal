@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff, Lock } from "lucide-react";
 import { OrdinifyLogo } from "@/components/ui/OrdinifyLogo";
 import { Button } from "@/components/ui/Button";
+import { FlashBanner } from "@/components/ui/FlashBanner";
+import { LogoLoader } from "@/components/ui/Spinner";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 export function ResetPasswordView() {
@@ -110,18 +112,33 @@ export function ResetPasswordView() {
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-[var(--danger-soft)] px-3 py-2 text-[13px] text-[var(--danger)]">
-              {error}
-            </p>
+            <FlashBanner
+              message={error}
+              tone="danger"
+              compact
+              duration={5000}
+              onDismiss={() => setError("")}
+            />
           ) : null}
           {success ? (
-            <p className="rounded-lg bg-[var(--success-soft)] px-3 py-2 text-[13px] text-[var(--success)]">
-              {success}
-            </p>
+            <FlashBanner
+              message={success}
+              tone="success"
+              compact
+              duration={5000}
+              onDismiss={() => setSuccess("")}
+            />
           ) : null}
 
           <Button type="submit" className="h-11 w-full" disabled={loading}>
-            {loading ? "Saving..." : "Reset Password"}
+            {loading ? (
+              <>
+                <LogoLoader size="xs" />
+                Saving…
+              </>
+            ) : (
+              "Reset Password"
+            )}
           </Button>
         </form>
 

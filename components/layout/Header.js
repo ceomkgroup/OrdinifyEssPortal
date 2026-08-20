@@ -14,6 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { LogoLoader } from "@/components/ui/Spinner";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { getDisplayName } from "@/lib/format";
@@ -170,8 +171,12 @@ export function Header({
                 }}
                 className="flex w-full items-center gap-2.5 border-t border-[var(--border)] px-3 py-2.5 text-left text-[13px] text-[var(--danger)] hover:bg-[var(--danger-soft)]"
               >
-                <LogOut className="h-4 w-4" />
-                Logout
+                {authLoading ? (
+                  <LogoLoader size="xs" />
+                ) : (
+                  <LogOut className="h-4 w-4" />
+                )}
+                {authLoading ? "Signing out…" : "Logout"}
               </button>
             </div>
           ) : null}

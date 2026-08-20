@@ -2,10 +2,8 @@
 
 import {
   ArrowRight,
-  CalendarClock,
   ChevronLeft,
   ChevronRight,
-  ClipboardList,
   Clock3,
   Eye,
   FilePenLine,
@@ -14,14 +12,15 @@ import {
   Plus,
   RefreshCw,
   Send,
-  X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Spinner } from "@/components/ui/Spinner";
+import { FlashBanner } from "@/components/ui/FlashBanner";
+import { SlideOver } from "@/components/ui/SlideOver";
+import { PageLoader } from "@/components/ui/Spinner";
 import { getAttendanceHistory } from "@/api/attendance";
 import {
   cancelAttendanceChange,
@@ -228,13 +227,16 @@ function Info({ label, value }) {
 }
 
 function RequestDetailPanel({
+  open,
   requestId,
   onClose,
   onCancelled,
   timeFormat = "12h",
   dateFormat = "DD/MM/YYYY",
 }) {
-  const { detail, loading, error, refetch } = useAttendanceChangeDetail(requestId);
+  const { detail, loading, error, refetch } = useAttendanceChangeDetail(
+    open ? requestId : null
+  );
   const [cancelling, setCancelling] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
@@ -260,154 +262,142 @@ function RequestDetailPanel({
   const statusLabel = detail?.statusLabel || detail?.status || "—";
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/45 p-3 backdrop-blur-[3px] sm:items-center">
-      <div className="max-h-[92vh] w-full max-w-lg overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_20px_50px_rgba(15,23,42,0.18)]">
-        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-          <div className="flex items-start gap-3">
-            <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--lavender-soft)] text-[var(--violet)]">
-              <ClipboardList className="h-5 w-5" />
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      title="Correction details"
+      subtitle="Compare original vs requested times"
+      wide
+    >
+      {loading ? (
+        <PageLoader
+          compact
+          label="Loading details"
+          hint="Fetching this correction…"
+        />
+      ) : error ? (
+        <p className="rounded-xl bg-[var(--danger-soft)] px-3 py-2.5 text-sm text-[var(--danger)]">
+          {error}
+        </p>
+      ) : !detail ? (
+        <p className="text-sm text-[var(--muted)]">Request not found.</p>
+      ) : (
+        <div className="space-y-4 pb-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex rounded-full border px-3 py-1 text-[12px] font-semibold capitalize ${statusTone(detail.status)}`}
+            >
+              {statusLabel}
             </span>
-            <div>
-              <p className="text-[16px] font-semibold tracking-tight text-[var(--text)]">
-                Correction details
+            {detail.levelName ? (
+              <span className="rounded-full bg-[var(--panel-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--muted)]">
+                {detail.levelName}
+                {detail.totalLevels != null
+                  ? ` · ${detail.currentLevel || 1}/${detail.totalLevels}`
+                  : ""}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Info
+              label="Attendance date"
+              value={formatDate(
+                detail.attendanceDate || detail.originalDate,
+                dateFormat
+              )}
+            />
+            <Info
+              label="Submitted on"
+              value={formatDateTime(detail.createdAt, dateFormat, timeFormat)}
+            />
+            {getDecisionAt(detail) ? (
+              <Info
+                label={`${getDecisionLabel(detail.status) || "Decided"} on`}
+                value={formatDateTime(
+                  getDecisionAt(detail),
+                  dateFormat,
+                  timeFormat
+                )}
+              />
+            ) : null}
+          </div>
+
+          <div className="grid items-stretch gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">
+                Original
               </p>
-              <p className="mt-0.5 text-[12px] text-[var(--muted)]">
-                Compare original vs requested times
+              <p className="mt-3 text-[14px] font-semibold tabular-nums text-[var(--text)]">
+                In {formatTime(detail.originalCheckIn, timeFormat)}
+              </p>
+              <p className="mt-1.5 text-[14px] font-semibold tabular-nums text-[var(--text)]">
+                Out {formatTime(detail.originalCheckOut, timeFormat)}
+              </p>
+            </div>
+
+            <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-[var(--lavender-soft)] text-[var(--violet)]">
+              <ArrowRight className="h-4 w-4" />
+            </div>
+
+            <div className="rounded-2xl border border-[var(--violet)]/30 bg-[var(--lavender-soft)] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--violet)]">
+                Requested
+              </p>
+              <p className="mt-3 text-[14px] font-semibold tabular-nums text-[var(--text)]">
+                In {formatTime(detail.checkInTime, timeFormat)}
+              </p>
+              <p className="mt-1.5 text-[14px] font-semibold tabular-nums text-[var(--text)]">
+                Out {formatTime(detail.checkOutTime, timeFormat)}
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            className="rounded-xl p-2 text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
 
-        <div className="max-h-[calc(92vh-76px)] space-y-4 overflow-y-auto p-5">
-          {loading ? (
-            <div className="flex min-h-[200px] items-center justify-center">
-              <Spinner />
-            </div>
-          ) : error ? (
-            <p className="rounded-xl bg-[var(--danger-soft)] px-3 py-2.5 text-sm text-[var(--danger)]">
-              {error}
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] px-4 py-3.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">
+              Reason
             </p>
-          ) : !detail ? (
-            <p className="text-sm text-[var(--muted)]">Request not found.</p>
+            <p className="mt-2 text-[14px] leading-relaxed text-[var(--text)]">
+              {detail.reason || "—"}
+            </p>
+          </div>
+
+          {actionError ? (
+            <FlashBanner
+              message={actionError}
+              tone="danger"
+              compact
+              duration={5000}
+              onDismiss={() => setActionError("")}
+            />
+          ) : null}
+          {actionSuccess ? (
+            <FlashBanner
+              message={actionSuccess}
+              tone="success"
+              compact
+              duration={4000}
+              onDismiss={() => setActionSuccess("")}
+            />
+          ) : null}
+
+          {isPending ? (
+            <Button
+              variant="outline"
+              className="h-11 w-full rounded-xl border-[var(--danger)] text-[var(--danger)]"
+              disabled={cancelling}
+              onClick={handleCancel}
+            >
+              {cancelling ? "Cancelling..." : "Cancel pending request"}
+            </Button>
           ) : (
-            <>
-              <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className={`inline-flex rounded-full border px-3 py-1 text-[12px] font-semibold capitalize ${statusTone(detail.status)}`}
-                >
-                  {statusLabel}
-                </span>
-                {detail.levelName ? (
-                  <span className="rounded-full bg-[var(--panel-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--muted)]">
-                    {detail.levelName}
-                    {detail.totalLevels != null
-                      ? ` · ${detail.currentLevel || 1}/${detail.totalLevels}`
-                      : ""}
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Info
-                  label="Attendance date"
-                  value={formatDate(
-                    detail.attendanceDate || detail.originalDate,
-                    dateFormat
-                  )}
-                />
-                <Info
-                  label="Submitted on"
-                  value={formatDateTime(detail.createdAt, dateFormat, timeFormat)}
-                />
-                {getDecisionAt(detail) ? (
-                  <Info
-                    label={`${getDecisionLabel(detail.status) || "Decided"} on`}
-                    value={formatDateTime(
-                      getDecisionAt(detail),
-                      dateFormat,
-                      timeFormat
-                    )}
-                  />
-                ) : null}
-              </div>
-
-              <div className="grid items-stretch gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-                <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">
-                    Original
-                  </p>
-                  <p className="mt-3 text-[14px] font-semibold tabular-nums text-[var(--text)]">
-                    In {formatTime(detail.originalCheckIn, timeFormat)}
-                  </p>
-                  <p className="mt-1.5 text-[14px] font-semibold tabular-nums text-[var(--text)]">
-                    Out {formatTime(detail.originalCheckOut, timeFormat)}
-                  </p>
-                </div>
-
-                <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-[var(--lavender-soft)] text-[var(--violet)]">
-                  <ArrowRight className="h-4 w-4" />
-                </div>
-
-                <div className="rounded-2xl border border-[var(--violet)]/30 bg-[var(--lavender-soft)] p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--violet)]">
-                    Requested
-                  </p>
-                  <p className="mt-3 text-[14px] font-semibold tabular-nums text-[var(--text)]">
-                    In {formatTime(detail.checkInTime, timeFormat)}
-                  </p>
-                  <p className="mt-1.5 text-[14px] font-semibold tabular-nums text-[var(--text)]">
-                    Out {formatTime(detail.checkOutTime, timeFormat)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] px-4 py-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">
-                  Reason
-                </p>
-                <p className="mt-2 text-[14px] leading-relaxed text-[var(--text)]">
-                  {detail.reason || "—"}
-                </p>
-              </div>
-
-              {actionError ? (
-                <p className="rounded-xl bg-[var(--danger-soft)] px-3 py-2 text-[12px] text-[var(--danger)]">
-                  {actionError}
-                </p>
-              ) : null}
-              {actionSuccess ? (
-                <p className="rounded-xl bg-[var(--success-soft)] px-3 py-2 text-[12px] text-[var(--success)]">
-                  {actionSuccess}
-                </p>
-              ) : null}
-
-              {isPending ? (
-                <Button
-                  variant="outline"
-                  className="h-11 w-full rounded-xl border-[var(--danger)] text-[var(--danger)]"
-                  disabled={cancelling}
-                  onClick={handleCancel}
-                >
-                  {cancelling ? "Cancelling..." : "Cancel pending request"}
-                </Button>
-              ) : (
-                <p className="pt-1 text-center text-[12px] text-[var(--muted)]">
-                  Only pending requests can be cancelled.
-                </p>
-              )}
-            </>
+            <p className="pt-1 text-center text-[12px] text-[var(--muted)]">
+              Only pending requests can be cancelled.
+            </p>
           )}
         </div>
-      </div>
-    </div>
+      )}
+    </SlideOver>
   );
 }
 
@@ -461,6 +451,7 @@ export function AttendanceChangeView({
               checkOutTime: toTimeInputValue(row.checkOutTime),
               reason: "",
             });
+            setShowForm(true);
           }
         }
       } catch {
@@ -581,165 +572,25 @@ export function AttendanceChangeView({
               type="button"
               className="h-10 rounded-xl"
               onClick={() => {
-                setShowForm((v) => !v);
+                setShowForm(true);
                 setFormError("");
                 setFormSuccess("");
               }}
             >
-              {showForm ? (
-                <>
-                  <X className="h-4 w-4" />
-                  Close form
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4" />
-                  New request
-                </>
-              )}
+              <Plus className="h-4 w-4" />
+              New request
             </Button>
           </div>
         </div>
       </section>
 
       {formSuccess ? (
-        <p className="rounded-xl bg-[var(--success-soft)] px-3 py-2.5 text-sm text-[var(--success)]">
-          {formSuccess}
-        </p>
-      ) : null}
-
-      {showForm ? (
-        <Card>
-          <div className="mb-4 flex items-center gap-2">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--lavender-soft)] text-[var(--violet)]">
-              <Send className="h-4 w-4" />
-            </span>
-            <div>
-              <h3 className="text-[15px] font-semibold text-[var(--text)]">
-                Submit correction
-              </h3>
-              <p className="text-[12px] text-[var(--muted)]">
-                Select a past log to prefill, then adjust the times.
-              </p>
-            </div>
-          </div>
-
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block text-[12px] font-medium text-[var(--text)] md:col-span-2">
-                Attendance log
-                <select
-                  className={fieldClass}
-                  value={form.logId}
-                  onChange={(e) => onPickLog(e.target.value)}
-                  disabled={historyLoading}
-                >
-                  <option value="">Select a past day to prefill (optional)…</option>
-                  {historyOptions.map((row) => (
-                    <option key={row.logId} value={row.logId}>
-                      {formatDate(row.attendanceDate, dateFormat)} · In{" "}
-                      {formatTime(row.checkInTime, timeFormat)} · Out{" "}
-                      {formatTime(row.checkOutTime, timeFormat)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block text-[12px] font-medium text-[var(--text)]">
-                Attendance date
-                <input
-                  type="date"
-                  required
-                  className={fieldClass}
-                  value={form.attendanceDate}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, attendanceDate: e.target.value }))
-                  }
-                />
-              </label>
-
-              <div className="flex items-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5 text-[12px] text-[var(--muted)]">
-                <Clock3 className="h-4 w-4 shrink-0 text-[var(--violet)]" />
-                {selectedLog ? (
-                  <span>
-                    Original recorded:{" "}
-                    <span className="font-semibold text-[var(--text)]">
-                      {formatTime(selectedLog.checkInTime, timeFormat)} →{" "}
-                      {formatTime(selectedLog.checkOutTime, timeFormat)}
-                    </span>
-                  </span>
-                ) : (
-                  <span>No log selected — enter corrected times manually.</span>
-                )}
-              </div>
-
-              <label className="block text-[12px] font-medium text-[var(--text)]">
-                Requested check-in
-                <input
-                  type="time"
-                  required
-                  className={fieldClass}
-                  value={form.checkInTime}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, checkInTime: e.target.value }))
-                  }
-                />
-              </label>
-
-              <label className="block text-[12px] font-medium text-[var(--text)]">
-                Requested check-out
-                <input
-                  type="time"
-                  required
-                  className={fieldClass}
-                  value={form.checkOutTime}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, checkOutTime: e.target.value }))
-                  }
-                />
-              </label>
-
-              <label className="block text-[12px] font-medium text-[var(--text)] md:col-span-2">
-                Reason
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="e.g. Forgot to check in / system missed my punch"
-                  className="mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]"
-                  value={form.reason}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, reason: e.target.value }))
-                  }
-                />
-              </label>
-            </div>
-
-            {formError ? (
-              <p className="rounded-lg bg-[var(--danger-soft)] px-3 py-2 text-[12px] text-[var(--danger)]">
-                {formError}
-              </p>
-            ) : null}
-
-            <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--border)] pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 rounded-xl"
-                onClick={() => {
-                  setShowForm(false);
-                  setForm(emptyForm());
-                  setFormError("");
-                }}
-              >
-                Discard
-              </Button>
-              <Button type="submit" className="h-10 rounded-xl" disabled={submitting}>
-                <CalendarClock className="h-4 w-4" />
-                {submitting ? "Submitting..." : "Submit for approval"}
-              </Button>
-            </div>
-          </form>
-        </Card>
+        <FlashBanner
+          message={formSuccess}
+          tone="success"
+          duration={4000}
+          onDismiss={() => setFormSuccess("")}
+        />
       ) : null}
 
       <Card bodyClassName="!min-h-0">
@@ -777,15 +628,21 @@ export function AttendanceChangeView({
         </div>
 
         {error ? (
-          <p className="mb-3 rounded-xl bg-[var(--danger-soft)] px-3 py-2.5 text-sm text-[var(--danger)]">
-            {error}
-          </p>
+          <FlashBanner
+            message={error}
+            tone="danger"
+            className="mb-3"
+            duration={5000}
+            autoDismiss={false}
+          />
         ) : null}
 
         {loading && rows.length === 0 ? (
-          <div className="flex min-h-[200px] items-center justify-center">
-            <Spinner />
-          </div>
+          <PageLoader
+            compact
+            label="Loading requests"
+            hint="Fetching attendance change requests…"
+          />
         ) : rows.length === 0 ? (
           <div className="flex min-h-[200px] flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] px-4 text-center">
             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--lavender-soft)] text-[var(--violet)]">
@@ -941,15 +798,151 @@ export function AttendanceChangeView({
         )}
       </Card>
 
-      {selectedId ? (
-        <RequestDetailPanel
-          requestId={selectedId}
-          timeFormat={timeFormat}
-          dateFormat={dateFormat}
-          onClose={() => setSelectedId(null)}
-          onCancelled={() => refetch()}
-        />
-      ) : null}
+      <SlideOver
+        open={showForm}
+        onClose={() => {
+          setShowForm(false);
+          setFormError("");
+        }}
+        title="Submit correction"
+        subtitle="Select a past log to prefill, then adjust the times"
+        wide
+      >
+        <form className="space-y-4 pb-8" onSubmit={handleSubmit}>
+          <label className="block text-[12px] font-medium text-[var(--muted)]">
+            Attendance log
+            <select
+              className={fieldClass}
+              value={form.logId}
+              onChange={(e) => onPickLog(e.target.value)}
+              disabled={historyLoading}
+            >
+              <option value="">Select a past day to prefill (optional)…</option>
+              {historyOptions.map((row) => (
+                <option key={row.logId} value={row.logId}>
+                  {formatDate(row.attendanceDate, dateFormat)} · In{" "}
+                  {formatTime(row.checkInTime, timeFormat)} · Out{" "}
+                  {formatTime(row.checkOutTime, timeFormat)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-[12px] font-medium text-[var(--muted)]">
+            Attendance date
+            <input
+              type="date"
+              required
+              className={fieldClass}
+              value={form.attendanceDate}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, attendanceDate: e.target.value }))
+              }
+            />
+          </label>
+
+          <div className="flex items-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5 text-[12px] text-[var(--muted)]">
+            <Clock3 className="h-4 w-4 shrink-0 text-[var(--violet)]" />
+            {selectedLog ? (
+              <span>
+                Original recorded:{" "}
+                <span className="font-semibold text-[var(--text)]">
+                  {formatTime(selectedLog.checkInTime, timeFormat)} →{" "}
+                  {formatTime(selectedLog.checkOutTime, timeFormat)}
+                </span>
+              </span>
+            ) : (
+              <span>No log selected — enter corrected times manually.</span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-[12px] font-medium text-[var(--muted)]">
+              Requested check-in
+              <input
+                type="time"
+                required
+                className={fieldClass}
+                value={form.checkInTime}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, checkInTime: e.target.value }))
+                }
+              />
+            </label>
+
+            <label className="block text-[12px] font-medium text-[var(--muted)]">
+              Requested check-out
+              <input
+                type="time"
+                required
+                className={fieldClass}
+                value={form.checkOutTime}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, checkOutTime: e.target.value }))
+                }
+              />
+            </label>
+          </div>
+
+          <label className="block text-[12px] font-medium text-[var(--muted)]">
+            Reason
+            <textarea
+              required
+              rows={4}
+              placeholder="e.g. Forgot to check in / system missed my punch"
+              className="mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]"
+              value={form.reason}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, reason: e.target.value }))
+              }
+            />
+          </label>
+
+          {formError ? (
+            <FlashBanner
+              message={formError}
+              tone="danger"
+              compact
+              duration={5000}
+              onDismiss={() => setFormError("")}
+            />
+          ) : null}
+
+          <div className="sticky bottom-0 -mx-5 border-t border-[var(--border)] bg-[var(--surface)] px-5 pt-4">
+            <div className="flex gap-2">
+              <Button
+                type="submit"
+                className="h-11 flex-1 rounded-xl"
+                disabled={submitting}
+              >
+                <Send className="h-4 w-4" />
+                {submitting ? "Submitting…" : "Submit for approval"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-xl"
+                onClick={() => {
+                  setShowForm(false);
+                  setForm(emptyForm());
+                  setFormError("");
+                }}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </form>
+      </SlideOver>
+
+      <RequestDetailPanel
+        open={Boolean(selectedId)}
+        requestId={selectedId}
+        timeFormat={timeFormat}
+        dateFormat={dateFormat}
+        onClose={() => setSelectedId(null)}
+        onCancelled={() => refetch()}
+      />
     </div>
   );
 }

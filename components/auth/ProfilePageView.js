@@ -19,7 +19,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Spinner } from "@/components/ui/Spinner";
+import { FlashBanner } from "@/components/ui/FlashBanner";
+import { PageLoader } from "@/components/ui/Spinner";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePortalProfile } from "@/hooks/usePortalProfile";
 import { formatDate, formatTime, getDisplayName } from "@/lib/format";
@@ -239,14 +240,46 @@ export function ProfilePageView() {
 
   const summary = useMemo(
     () => [
-      { icon: Hash, label: "Code", value: profile?.employeeCode },
-      { icon: Briefcase, label: "Department", value: profile?.departmentName?.trim() },
-      { icon: UserRound, label: "Designation", value: profile?.designationName?.trim() },
-      { icon: Building2, label: "Branch", value: profile?.branchName?.trim() },
-      { icon: IdCard, label: "Type", value: titleCase(profile?.employmentType) },
-      { icon: CalendarDays, label: "Joined", value: formatDate(profile?.joinDate, dateFormat) },
-      { icon: Clock3, label: "Shift", value: profile?.shiftName },
-      { icon: Mail, label: "Verified", value: profile?.emailVerified ? "Yes" : "No" },
+      {
+        icon: Hash,
+        label: "Employee Code",
+        value: profile?.employeeCode,
+      },
+      {
+        icon: Briefcase,
+        label: "Department",
+        value: profile?.departmentName?.trim(),
+      },
+      {
+        icon: UserRound,
+        label: "Designation",
+        value: profile?.designationName?.trim(),
+      },
+      {
+        icon: Building2,
+        label: "Branch",
+        value: profile?.branchName?.trim(),
+      },
+      {
+        icon: IdCard,
+        label: "Employment Type",
+        value: titleCase(profile?.employmentType),
+      },
+      {
+        icon: CalendarDays,
+        label: "Join Date",
+        value: formatDate(profile?.joinDate, dateFormat),
+      },
+      {
+        icon: Clock3,
+        label: "Shift",
+        value: profile?.shiftName,
+      },
+      {
+        icon: Mail,
+        label: "Email Verified",
+        value: profile?.emailVerified ? "Yes" : "No",
+      },
     ],
     [profile, dateFormat]
   );
@@ -348,11 +381,7 @@ export function ProfilePageView() {
   }
 
   if (loading && !profile) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Spinner />
-      </div>
-    );
+    return <PageLoader label="Loading profile" hint="Fetching your employee details…" />;
   }
 
   if (!profile && loadError) {
@@ -390,22 +419,39 @@ export function ProfilePageView() {
         ) : null}
       </div>
 
-      {error || loadError ? (
-        <p className="rounded-xl bg-[var(--danger-soft)] px-3 py-2.5 text-sm text-[var(--danger)]">
-          {error || loadError}
-        </p>
+      {error ? (
+        <FlashBanner
+          message={error}
+          tone="danger"
+          duration={5000}
+          onDismiss={() => setError("")}
+        />
+      ) : loadError ? (
+        <FlashBanner
+          message={loadError}
+          tone="danger"
+          autoDismiss={false}
+        />
       ) : null}
       {message ? (
-        <p className="rounded-xl bg-[var(--success-soft)] px-3 py-2.5 text-sm text-[var(--success)]">
-          {message}
-        </p>
+        <FlashBanner
+          message={message}
+          tone="success"
+          duration={4000}
+          onDismiss={() => setMessage("")}
+        />
       ) : null}
 
       {/* Hero */}
-      <Card>
+      <Card bodyClassName="space-y-5">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           <div className="relative w-fit shrink-0">
-            <Avatar person={profile} name={displayName} size={88} />
+            <Avatar
+              person={profile}
+              name={displayName}
+              size={96}
+              className="ring-4 ring-[var(--lavender-soft)]"
+            />
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -423,6 +469,7 @@ export function ProfilePageView() {
               onChange={onPhotoSelected}
             />
           </div>
+
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-[family-name:var(--font-heading)] text-xl font-semibold text-[var(--text)] md:text-2xl">
@@ -435,34 +482,54 @@ export function ProfilePageView() {
                 {titleCase(status)}
               </Badge>
             </div>
-            <p className="mt-1 break-all text-sm text-[var(--muted)]">
+
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--lavender-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--violet)]">
+                <Hash className="h-3 w-3" />
+                Employee Code · {profile?.employeeCode || "—"}
+              </span>
+              {profile?.employmentType ? (
+                <span className="rounded-full bg-[var(--panel-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                  {titleCase(profile.employmentType)}
+                </span>
+              ) : null}
+            </div>
+
+            <p className="mt-2.5 text-[13px] font-medium text-[var(--text)]">
+              {profile?.designationName?.trim() || "—"}
+              {profile?.departmentName ? (
+                <span className="font-normal text-[var(--muted)]">
+                  {" "}
+                  · {profile.departmentName.trim()}
+                </span>
+              ) : null}
+            </p>
+
+            <p className="mt-1 break-all text-[12px] text-[var(--muted)]">
               {profile?.email || "—"}
               {profile?.phoneNumber ? ` · ${profile.phoneNumber}` : ""}
             </p>
-            <p className="mt-1 text-[12px] text-[var(--muted)]">
-              {profile?.designationName?.trim() || "—"}
-              {profile?.departmentName ? ` · ${profile.departmentName.trim()}` : ""}
-            </p>
+
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={photoSaving}
-              className="mt-2 text-[12px] font-semibold text-[var(--violet)] hover:underline disabled:opacity-60"
+              className="mt-3 text-[12px] font-semibold text-[var(--violet)] hover:underline disabled:opacity-60"
             >
               {photoSaving ? "Uploading..." : "Change photo"}
             </button>
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           {summary.map(({ icon: Icon, label, value }) => (
             <div
               key={label}
-              className="rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3.5 py-3"
+              className="rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3.5 py-3 transition hover:border-[var(--lavender)] hover:bg-[var(--surface)]"
             >
-              <div className="mb-1.5 flex items-center gap-1.5">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
                 <Icon className="h-3.5 w-3.5 text-[var(--violet)]" />
-                <span className="text-[11px] text-[var(--muted)]">{label}</span>
+                {label}
               </div>
               <p
                 className="truncate text-[13px] font-semibold text-[var(--text)]"

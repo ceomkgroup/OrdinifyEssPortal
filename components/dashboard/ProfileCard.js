@@ -2,21 +2,26 @@ import {
   Briefcase,
   Building2,
   CalendarDays,
-  IdCard,
+  Hash,
   Mail,
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
-import { formatDate } from "@/lib/format";
+import { formatDate, getDisplayName } from "@/lib/format";
 
-function Detail({ icon: Icon, value }) {
+function MetaTile({ icon: Icon, label, value }) {
   if (!value) return null;
   return (
-    <div className="flex items-center gap-2.5 text-[13px] text-[var(--text)]">
-      <Icon className="h-4 w-4 shrink-0 text-[var(--muted)]" strokeWidth={1.75} />
-      <span className="truncate">{value}</span>
+    <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+        <Icon className="h-3 w-3 text-[var(--violet)]" strokeWidth={2} />
+        {label}
+      </div>
+      <p className="mt-1 truncate text-[12px] font-semibold text-[var(--text)]" title={String(value)}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -24,43 +29,85 @@ function Detail({ icon: Icon, value }) {
 export function ProfileCard({ employee, dateFormat }) {
   if (!employee) return null;
 
+  const name =
+    employee.fullName ||
+    getDisplayName(employee) ||
+    [employee.firstName, employee.lastName].filter(Boolean).join(" ") ||
+    "Employee";
+
   return (
-    <Card className="h-full" bodyClassName="flex flex-col justify-center">
-      <div className="flex gap-4 sm:gap-5">
+    <Card className="h-full overflow-hidden" bodyClassName="flex h-full flex-col">
+      <div className="flex items-start gap-3.5 sm:gap-4">
         <Avatar
-          name={employee.fullName}
+          name={name}
           src={employee.photoUrl || employee.avatarUrl || employee.profilePhoto}
-          size={96}
-          className="shrink-0 ring-4 ring-[var(--background)]"
+          size={78}
+          className="shrink-0 ring-4 ring-[var(--lavender-soft)]"
         />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-[family-name:var(--font-heading)] text-[20px] font-semibold leading-tight text-[var(--text)]">
-              {employee.fullName}
+            <h2 className="font-[family-name:var(--font-heading)] text-[18px] font-semibold leading-tight text-[var(--text)] sm:text-[20px]">
+              {name}
             </h2>
             <Badge variant="success" className="rounded-full px-2.5">
               Active
             </Badge>
           </div>
 
-          <div className="mt-1.5 flex items-center gap-1.5 text-[13px] font-medium text-[var(--violet)]">
-            <IdCard className="h-3.5 w-3.5" strokeWidth={1.8} />
-            <span>{employee.employeeCode}</span>
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[var(--lavender-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--violet)]">
+            <Hash className="h-3 w-3" />
+            Employee Code · {employee.employeeCode || "—"}
           </div>
 
-          <div className="mt-4 grid gap-2.5 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-2.5">
-            <Detail icon={Briefcase} value={employee.departmentName} />
-            <Detail icon={UserRound} value={employee.designationName} />
-            <Detail icon={Building2} value={employee.branchName} />
-            <Detail icon={UserRound} value={employee.managerName} />
-            <Detail
-              icon={CalendarDays}
-              value={formatDate(employee.joinDate, dateFormat)}
-            />
-            <Detail icon={Mail} value={employee.email} />
-          </div>
+          {employee.designationName ? (
+            <p className="mt-2 truncate text-[13px] font-medium text-[var(--text)]">
+              {employee.designationName}
+              {employee.departmentName ? (
+                <span className="font-normal text-[var(--muted)]">
+                  {" "}
+                  · {employee.departmentName}
+                </span>
+              ) : null}
+            </p>
+          ) : null}
         </div>
+      </div>
+
+      <div className="mt-4 grid flex-1 grid-cols-1 content-start gap-2 sm:grid-cols-2">
+        <MetaTile
+          icon={Hash}
+          label="Employee Code"
+          value={employee.employeeCode}
+        />
+        <MetaTile
+          icon={UserRound}
+          label="Designation"
+          value={employee.designationName}
+        />
+        <MetaTile
+          icon={Briefcase}
+          label="Department"
+          value={employee.departmentName}
+        />
+        <MetaTile
+          icon={CalendarDays}
+          label="Join Date"
+          value={formatDate(employee.joinDate, dateFormat)}
+        />
+        <MetaTile
+          icon={Building2}
+          label="Branch"
+          value={employee.branchName}
+        />
+        <MetaTile icon={Mail} label="Email" value={employee.email} />
+        {employee.managerName ? (
+          <MetaTile
+            icon={UserRound}
+            label="Manager"
+            value={employee.managerName}
+          />
+        ) : null}
       </div>
     </Card>
   );
