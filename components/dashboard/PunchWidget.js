@@ -29,6 +29,8 @@ import {
 import { formatTime, formatWorkedTimer } from "@/lib/format";
 import { canWebPunch as canWebPunchPermission } from "@/lib/permissions";
 import { useModules } from "@/components/modules/ModulesProvider";
+import { AttendanceTypeBadge } from "@/components/attendance/AttendanceTypeBadge";
+import { useAttendanceTypes } from "@/hooks/useAttendanceTypes";
 
 function parseShiftMinutes(time24) {
   if (!time24) return null;
@@ -156,6 +158,7 @@ export function PunchWidget({
   const [punchSuccess, setPunchSuccess] = useState("");
   // Avoid CSS width animation on first paint (looks like fill→drain on refresh).
   const [progressReady, setProgressReady] = useState(false);
+  const { types: attendanceTypes } = useAttendanceTypes();
 
   const attendanceLogId = resolveAttendanceLogId(todayAttendance);
 
@@ -466,10 +469,13 @@ export function PunchWidget({
             <Timer className="h-3.5 w-3.5" />
             Today&apos;s Attendance
           </span>
-          {todayAttendance?.attTypeName ? (
-            <span className="rounded-full bg-[var(--success-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--success)]">
-              {todayAttendance.attTypeName}
-            </span>
+          {todayAttendance?.attTypeName ||
+          todayAttendance?.attTypeCode ||
+          todayAttendance?.status ? (
+            <AttendanceTypeBadge
+              row={todayAttendance}
+              types={attendanceTypes}
+            />
           ) : null}
           {isOnBreak ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--warning)]">

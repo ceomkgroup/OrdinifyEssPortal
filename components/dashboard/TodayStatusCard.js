@@ -1,3 +1,5 @@
+"use client";
+
 import {
   CalendarClock,
   ClipboardList,
@@ -6,7 +8,10 @@ import {
   LogOut,
   Timer,
 } from "lucide-react";
+import { AttendanceTypeBadge } from "@/components/attendance/AttendanceTypeBadge";
 import { Card } from "@/components/ui/Card";
+import { useAttendanceTypes } from "@/hooks/useAttendanceTypes";
+import { resolveAttendanceTypeDisplay } from "@/lib/attendance-history";
 import { formatTime } from "@/lib/format";
 
 /**
@@ -16,6 +21,9 @@ import { formatTime } from "@/lib/format";
  * - null / empty → not checked in
  */
 export function TodayStatusCard({ today, timeFormat = "12h", emptyMessage }) {
+  const { types } = useAttendanceTypes();
+  const typeDisplay = resolveAttendanceTypeDisplay(today, types);
+
   const hasPunches = Boolean(
     today &&
       (today.punchInAt ||
@@ -25,14 +33,11 @@ export function TodayStatusCard({ today, timeFormat = "12h", emptyMessage }) {
         today.attTypeName)
   );
 
-  const status =
-    today?.attTypeName ||
-    today?.status ||
-    (today?.isCheckedIn ? "Checked In" : null);
   const inTime = today?.checkInTime || today?.punchInAt;
   const outTime = today?.checkOutTime || today?.punchOutAt;
   const late = today?.lateMinutes;
   const isLate = Number(late) > 0;
+  const color = typeDisplay.colorCode || (isLate ? "#f59e0b" : "#22c55e");
 
   return (
     <Card
@@ -56,18 +61,24 @@ export function TodayStatusCard({ today, timeFormat = "12h", emptyMessage }) {
       ) : (
         <div className="flex flex-1 flex-col gap-2.5">
           <div
-            className={`rounded-xl border px-3 py-2.5 ${
-              isLate
-                ? "border-[var(--warning)]/25 bg-[var(--warning-soft)]"
-                : "border-[var(--success)]/20 bg-[var(--success-soft)]"
-            }`}
+            className="rounded-xl border px-3 py-2.5"
+            style={{
+              borderColor: `${color}40`,
+              backgroundColor: `${color}14`,
+            }}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
               Attendance
             </p>
-            <p className="mt-0.5 text-[15px] font-semibold text-[var(--text)]">
-              {status || "Present"}
-            </p>
+            <AttendanceTypeBadge
+              row={today}
+              types={types}
+              fallback={
+                today?.status ||
+                (today?.isCheckedIn ? "Checked In" : "Present")
+              }
+              className="!px-2.5 !py-1 !text-[13px]"
+            />
           </div>
 
           {today?.shiftName ? (

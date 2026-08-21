@@ -3,8 +3,11 @@
 import { Cell, Pie, PieChart } from "recharts";
 import { Card } from "@/components/ui/Card";
 import { ChartContainer } from "@/components/ui/ChartContainer";
+import { resolveLeaveTypeName, useLeaveTypes } from "@/hooks/useLeaveTypes";
 
 export function LeaveBalanceCard({ leave }) {
+  const { types } = useLeaveTypes();
+
   if (!leave) return null;
 
   const remaining = leave.totalRemaining ?? 0;
@@ -67,7 +70,7 @@ export function LeaveBalanceCard({ leave }) {
                   style={{ background: row.colorCode || "#dedede" }}
                 />
                 <p className="text-[13px] font-semibold text-[var(--text)]">
-                  {row.leaveTypeName}
+                  {resolveLeaveTypeName(row, types, row.leaveTypeName || "—")}
                 </p>
               </div>
 

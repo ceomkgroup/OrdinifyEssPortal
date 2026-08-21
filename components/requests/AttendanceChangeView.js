@@ -19,6 +19,9 @@ import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FlashBanner } from "@/components/ui/FlashBanner";
+import {
+  ListFiltersBar,
+} from "@/components/ui/ListFilters";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { PageLoader } from "@/components/ui/Spinner";
 import { getAttendanceHistory } from "@/api/attendance";
@@ -28,13 +31,14 @@ import {
   useAttendanceChangeDetail,
   useAttendanceChangeList,
 } from "@/hooks/useAttendanceChange";
-import { formatDate, formatDateTime, formatTime } from "@/lib/format";
+import { formatDate, formatDateTime, formatTime, rowSerial } from "@/lib/format";
 
-const STATUS_FILTERS = [
-  { value: "all", label: "All" },
+const ATTENDANCE_CHANGE_STATUS_OPTIONS = [
+  { value: "all", label: "All statuses" },
   { value: "pending", label: "Pending" },
   { value: "approved", label: "Approved" },
   { value: "rejected", label: "Rejected" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 const fieldClass =
@@ -413,6 +417,8 @@ export function AttendanceChangeView({
   const [limit] = useState(10);
   const [selectedId, setSelectedId] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [listQuery, setListQuery] = useState("");
+  const [filterBusy, setFilterBusy] = useState(false);
 
   const [form, setForm] = useState(emptyForm);
   const [historyOptions, setHistoryOptions] = useState([]);
@@ -426,6 +432,24 @@ export function AttendanceChangeView({
     page,
     limit,
   });
+
+  const filteredRows = useMemo(() => {
+    const q = listQuery.trim().toLowerCase();
+    if (!q) return rows || [];
+    return (rows || []).filter((row) => {
+      const hay = [
+        row.reason,
+        row.status,
+        row.statusLabel,
+        row.attendanceDate,
+        row.originalDate,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [rows, listQuery]);
 
   useEffect(() => {
     let alive = true;
@@ -594,8 +618,8 @@ export function AttendanceChangeView({
       ) : null}
 
       <Card bodyClassName="!min-h-0">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="mb-4">
+          <div className="mb-3">
             <h3 className="text-[15px] font-semibold text-[var(--text)]">
               My requests
             </h3>
@@ -603,28 +627,19 @@ export function AttendanceChangeView({
               Track pending, approved and rejected corrections
             </p>
           </div>
-          <div className="inline-flex rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] p-1">
-            {STATUS_FILTERS.map((opt) => {
-              const active = status === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => {
-                    setStatus(opt.value);
-                    setPage(1);
-                  }}
-                  className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${
-                    active
-                      ? "bg-[var(--surface)] text-[var(--violet)] shadow-sm"
-                      : "text-[var(--muted)] hover:text-[var(--text)]"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
+          <ListFiltersBar
+            search={listQuery}
+            onSearchChange={setListQuery}
+            searchPlaceholder="Search date, reason, status…"
+            status={status}
+            onStatusChange={(next) => {
+              setStatus(next);
+              setPage(1);
+            }}
+            statusOptions={ATTENDANCE_CHANGE_STATUS_OPTIONS}
+            loading={loading}
+            onBusyChange={setFilterBusy}
+          />
         </div>
 
         {error ? (
@@ -637,13 +652,17 @@ export function AttendanceChangeView({
           />
         ) : null}
 
-        {loading && rows.length === 0 ? (
+        {loading || filterBusy ? (
           <PageLoader
             compact
-            label="Loading requests"
-            hint="Fetching attendance change requests…"
+            label={loading ? "Loading requests" : "Updating results"}
+            hint={
+              loading
+                ? "Fetching attendance change requests…"
+                : "Applying your search and filters…"
+            }
           />
-        ) : rows.length === 0 ? (
+        ) : filteredRows.length === 0 ? (
           <div className="flex min-h-[200px] flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] px-4 text-center">
             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--lavender-soft)] text-[var(--violet)]">
               <Inbox className="h-6 w-6" />
@@ -670,6 +689,9 @@ export function AttendanceChangeView({
               <table className="min-w-full text-left text-[13px]">
                 <thead>
                   <tr className="border-b border-[var(--border)] bg-[var(--panel-soft)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
+                    <th className="w-12 whitespace-nowrap px-3 py-2.5 font-semibold">
+                      #
+                    </th>
                     <th className="whitespace-nowrap px-3 py-2.5 font-semibold">
                       Submitted
                     </th>
@@ -693,7 +715,7 @@ export function AttendanceChangeView({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => {
+                  {filteredRows.map((row, index) => {
                     const label = row.statusLabel || row.status || "—";
                     const decisionAt = getDecisionAt(row);
                     const decisionLabel = getDecisionLabel(row.status);
@@ -702,6 +724,9 @@ export function AttendanceChangeView({
                         key={row.requestId}
                         className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-soft)]/50"
                       >
+                        <td className="px-3 py-3 tabular-nums text-[var(--muted)]">
+                          {rowSerial(index, page, limit)}
+                        </td>
                         <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
                           {row.createdAt
                             ? formatDateTime(row.createdAt, dateFormat, timeFormat)

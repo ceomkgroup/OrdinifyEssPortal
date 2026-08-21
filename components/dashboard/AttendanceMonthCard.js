@@ -2,14 +2,51 @@
 
 import { Card } from "@/components/ui/Card";
 import { useModules } from "@/components/modules/ModulesProvider";
+import { useAttendanceTypes } from "@/hooks/useAttendanceTypes";
+import { getAttendanceTypeColor } from "@/lib/attendance-history";
 import { formatHoursMinutes, formatMonthYear } from "@/lib/format";
 
-function Stat({ label, value, valueClass = "text-[var(--text)]", boxClass = "bg-[var(--panel-soft)]" }) {
+function Stat({
+  label,
+  value,
+  valueClass = "text-[var(--text)]",
+  boxClass = "bg-[var(--panel-soft)]",
+  style,
+}) {
   return (
-    <div className={`rounded-lg px-2 py-2.5 text-center ${boxClass}`}>
-      <p className={`text-[16px] font-bold leading-none ${valueClass}`}>{value}</p>
-      <p className="mt-1.5 text-[10px] leading-tight text-[var(--muted)]">{label}</p>
+    <div
+      className={`rounded-lg px-2 py-2.5 text-center ${boxClass}`}
+      style={style}
+    >
+      <p className={`text-[16px] font-bold leading-none ${valueClass}`}>
+        {value}
+      </p>
+      <p className="mt-1.5 text-[10px] leading-tight text-[var(--muted)]">
+        {label}
+      </p>
     </div>
+  );
+}
+
+function TypeStat({ label, value, code, types, fallbackColor }) {
+  const color =
+    getAttendanceTypeColor(code, types) ||
+    getAttendanceTypeColor(label, types) ||
+    fallbackColor;
+  if (!color) {
+    return <Stat label={label} value={value} />;
+  }
+  return (
+    <Stat
+      label={label}
+      value={value}
+      valueClass=""
+      boxClass=""
+      style={{
+        backgroundColor: `${color}18`,
+        color,
+      }}
+    />
   );
 }
 
@@ -42,6 +79,7 @@ function normalizeMonth(attendance) {
 
 export function AttendanceMonthCard({ attendance }) {
   const { hasFlag } = useModules();
+  const { types } = useAttendanceTypes();
   const breakEnabled = hasFlag("breakManagement");
   const month = normalizeMonth(attendance);
   if (!month) return null;
@@ -58,39 +96,50 @@ export function AttendanceMonthCard({ attendance }) {
         <>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
             <Stat label="Total Days" value={month.totalDays} />
-            <Stat
+            <TypeStat
               label="Present"
               value={month.present}
-              valueClass="text-[var(--success)]"
-              boxClass="bg-[var(--success-soft)]"
+              code="P"
+              types={types}
+              fallbackColor="#22c55e"
             />
-            <Stat
+            <TypeStat
               label="Absent"
               value={month.absent}
-              valueClass="text-[var(--danger)]"
-              boxClass="bg-[var(--danger-soft)]"
+              code="A"
+              types={types}
+              fallbackColor="#ef4444"
             />
-            <Stat
+            <TypeStat
               label="Leave"
               value={month.leave}
-              valueClass="text-[var(--violet)]"
-              boxClass="bg-[var(--lavender-soft)]"
+              code="CL"
+              types={types}
+              fallbackColor="#7b39ec"
             />
-            <Stat
+            <TypeStat
               label="Holiday"
               value={month.holiday}
-              valueClass="text-[var(--deep-purple)]"
-              boxClass="bg-[var(--lavender-soft)]"
+              code="H"
+              types={types}
+              fallbackColor="#a0dab5"
             />
-            <Stat
+            <TypeStat
               label="Half Day"
               value={month.halfDay}
-              valueClass="text-[var(--warning)]"
-              boxClass="bg-[var(--warning-soft)]"
+              code="HD"
+              types={types}
+              fallbackColor="#f97316"
             />
           </div>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <Stat label="Late" value={month.late} />
+            <TypeStat
+              label="Late"
+              value={month.late}
+              code="LP"
+              types={types}
+              fallbackColor="#f59e0b"
+            />
             <Stat
               label="Total Working Hours"
               value={formatHoursMinutes(month.totalWorkingHours)}
@@ -109,17 +158,19 @@ export function AttendanceMonthCard({ attendance }) {
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label="Total Days" value={month.totalDays} />
-          <Stat
+          <TypeStat
             label="Present"
             value={month.present}
-            valueClass="text-[var(--success)]"
-            boxClass="bg-[var(--success-soft)]"
+            code="P"
+            types={types}
+            fallbackColor="#22c55e"
           />
-          <Stat
+          <TypeStat
             label="Late Days"
             value={month.late}
-            valueClass="text-[var(--warning)]"
-            boxClass="bg-[var(--warning-soft)]"
+            code="LP"
+            types={types}
+            fallbackColor="#f59e0b"
           />
           <Stat label="Late Minutes" value={month.totalLateMinutes ?? 0} />
           <Stat

@@ -19,18 +19,21 @@ import {
   Timer,
 } from "lucide-react";
 import { getAttendanceHistoryAll } from "@/api/attendance";
+import { AttendanceTypeBadge } from "@/components/attendance/AttendanceTypeBadge";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FlashBanner } from "@/components/ui/FlashBanner";
+import { ListFiltersBar } from "@/components/ui/ListFilters";
 import { PageLoader, LogoLoader } from "@/components/ui/Spinner";
 import { useAttendancePage } from "@/hooks/useAttendance";
+import { useAttendanceTypes } from "@/hooks/useAttendanceTypes";
 import { useModules } from "@/components/modules/ModulesProvider";
 import {
-  STATUS_FILTERS,
   attendanceRowsToCsv,
   downloadCsv,
   filterAttendanceByStatus,
+  getAttendanceTypeColor,
   monthRange,
 } from "@/lib/attendance-history";
 import {
@@ -38,6 +41,7 @@ import {
   formatHoursMinutes,
   formatMonthYear,
   formatTime,
+  rowSerial,
 } from "@/lib/format";
 
 const MONTH_OPTIONS = [
@@ -55,14 +59,25 @@ const MONTH_OPTIONS = [
   "December",
 ];
 
-function Stat({ label, value, tone = "text-[var(--text)]", hint }) {
+function Stat({ label, value, tone = "text-[var(--text)]", hint, color }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-3">
+    <div
+      className="rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-3"
+      style={
+        color
+          ? {
+              borderColor: `${color}33`,
+              backgroundColor: `${color}14`,
+            }
+          : undefined
+      }
+    >
       <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
         {label}
       </p>
       <p
-        className={`mt-1 truncate text-[16px] font-bold tabular-nums leading-tight ${tone}`}
+        className={`mt-1 truncate text-[16px] font-bold tabular-nums leading-tight ${color ? "" : tone}`}
+        style={color ? { color } : undefined}
         title={value != null ? String(value) : undefined}
       >
         {value ?? "—"}
@@ -207,7 +222,12 @@ export function AttendanceView() {
     refetch,
   } = useAttendancePage();
 
+  const { types: attendanceTypes, filterOptions: statusFilterOptions } =
+    useAttendanceTypes();
+
   const [statusFilter, setStatusFilter] = useState("all");
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [filterBusy, setFilterBusy] = useState(false);
   const [monthRows, setMonthRows] = useState([]);
   const [monthRowsLoading, setMonthRowsLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -259,13 +279,37 @@ export function AttendanceView() {
   }, [filterActive, year, month]);
 
   const filteredMonthRows = useMemo(
-    () => filterAttendanceByStatus(monthRows, statusFilter),
-    [monthRows, statusFilter]
+    () => filterAttendanceByStatus(monthRows, statusFilter, attendanceTypes),
+    [monthRows, statusFilter, attendanceTypes]
   );
 
-  const displayRows = filterActive
-    ? filteredMonthRows.slice((page - 1) * limit, page * limit)
-    : history;
+  const displayRows = useMemo(() => {
+    const base = filterActive
+      ? filteredMonthRows.slice((page - 1) * limit, page * limit)
+      : history;
+    const q = historyQuery.trim().toLowerCase();
+    if (!q) return base || [];
+    return (base || []).filter((row) => {
+      const hay = [
+        row.attendanceDate,
+        row.attTypeName,
+        row.statusLabel,
+        row.shiftName,
+        row.remarks,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [
+    filterActive,
+    filteredMonthRows,
+    page,
+    limit,
+    history,
+    historyQuery,
+  ]);
 
   const total = filterActive
     ? filteredMonthRows.length
@@ -301,7 +345,7 @@ export function AttendanceView() {
   );
 
   const historyColSpan =
-    8 + (breakEnabled ? 1 : 0) + (canRequestChange ? 1 : 0) + 2;
+    9 + (breakEnabled ? 1 : 0) + (canRequestChange ? 1 : 0) + 2;
 
   function onStatusFilterChange(next) {
     setStatusFilter(next);
@@ -314,7 +358,11 @@ export function AttendanceView() {
     try {
       const { from, to } = monthRange(year, month);
       const rows = await getAttendanceHistoryAll({ from, to });
-      const filtered = filterAttendanceByStatus(rows, statusFilter);
+      const filtered = filterAttendanceByStatus(
+        rows,
+        statusFilter,
+        attendanceTypes
+      );
       const csv = attendanceRowsToCsv(filtered, { includeBreak: breakEnabled });
       const filterPart =
         statusFilter === "all" ? "all" : statusFilter.toLowerCase();
@@ -327,7 +375,7 @@ export function AttendanceView() {
     } finally {
       setExporting(false);
     }
-  }, [year, month, statusFilter, breakEnabled]);
+  }, [year, month, statusFilter, breakEnabled, attendanceTypes]);
 
   if (loading && !summary && !today) {
     return (
@@ -431,10 +479,13 @@ export function AttendanceView() {
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-[var(--success-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--success)]">
-                  {today.attTypeName ||
-                    (today.isCheckedIn ? "Checked In" : "Present")}
-                </span>
+                <AttendanceTypeBadge
+                  row={today}
+                  types={attendanceTypes}
+                  fallback={
+                    today.isCheckedIn ? "Checked In" : "Present"
+                  }
+                />
                 {today.isCheckedOut ? (
                   <span className="rounded-full bg-[var(--lavender-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--violet)]">
                     Checked Out
@@ -559,39 +610,40 @@ export function AttendanceView() {
           <Stat
             label="Present"
             value={summary?.presentCount ?? summary?.present ?? 0}
-            tone="text-[var(--success)]"
+            color={getAttendanceTypeColor("P", attendanceTypes, "#22c55e")}
           />
           {summary?.absentCount != null || summary?.absent != null ? (
             <Stat
               label="Absent"
               value={summary?.absentCount ?? summary?.absent}
-              tone="text-[var(--danger)]"
+              color={getAttendanceTypeColor("A", attendanceTypes, "#ef4444")}
             />
           ) : null}
           {summary?.leaveCount != null || summary?.leave != null ? (
             <Stat
               label="Leave"
               value={summary?.leaveCount ?? summary?.leave}
-              tone="text-[var(--violet)]"
+              color={getAttendanceTypeColor("CL", attendanceTypes, "#7b39ec")}
             />
           ) : null}
           {summary?.holidayCount != null || summary?.holiday != null ? (
             <Stat
               label="Holiday"
               value={summary?.holidayCount ?? summary?.holiday}
+              color={getAttendanceTypeColor("H", attendanceTypes, "#a0dab5")}
             />
           ) : null}
           {summary?.halfDayCount != null || summary?.halfDay != null ? (
             <Stat
               label="Half Day"
               value={summary?.halfDayCount ?? summary?.halfDay}
-              tone="text-[var(--warning)]"
+              color={getAttendanceTypeColor("HD", attendanceTypes, "#f97316")}
             />
           ) : null}
           <Stat
             label="Late Days"
             value={summary?.lateCount ?? 0}
-            tone="text-[var(--warning)]"
+            color={getAttendanceTypeColor("LP", attendanceTypes, "#f59e0b")}
           />
           <Stat
             label="Late Minutes"
@@ -627,37 +679,29 @@ export function AttendanceView() {
           )
         }
       >
-        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-1.5">
-            {STATUS_FILTERS.map((item) => {
-              const active = statusFilter === item.value;
-              return (
-                <button
-                  key={item.value}
-                  type="button"
-                  onClick={() => onStatusFilterChange(item.value)}
-                  className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition ${
-                    active
-                      ? "bg-[var(--violet)] text-white"
-                      : "border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
+        <div className="mb-3 flex flex-col gap-3">
+          <ListFiltersBar
+            search={historyQuery}
+            onSearchChange={setHistoryQuery}
+            searchPlaceholder="Search date, status, shift…"
+            status={statusFilter}
+            onStatusChange={onStatusFilterChange}
+            statusOptions={statusFilterOptions}
+            loading={listLoading}
+            onBusyChange={setFilterBusy}
+          />
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-xl"
+              disabled={exporting || listLoading || filterBusy}
+              onClick={handleExportCsv}
+            >
+              <Download className="h-4 w-4" />
+              {exporting ? "Exporting…" : "Export CSV"}
+            </Button>
           </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 rounded-xl"
-            disabled={exporting || listLoading}
-            onClick={handleExportCsv}
-          >
-            <Download className="h-4 w-4" />
-            {exporting ? "Exporting…" : "Export CSV"}
-          </Button>
         </div>
 
         {filterError ? (
@@ -668,16 +712,30 @@ export function AttendanceView() {
 
         {filterActive ? (
           <p className="mb-3 text-[11px] text-[var(--muted)]">
-            Showing {statusFilter} records for{" "}
-            {formatMonthYear(year, month)}
+            Showing{" "}
+            {statusFilterOptions.find((o) => o.value === statusFilter)
+              ?.label || statusFilter}{" "}
+            for {formatMonthYear(year, month)}
             {monthRowsLoading ? " · loading month…" : ""}.
           </p>
         ) : null}
 
+        {listLoading || filterBusy ? (
+          <PageLoader
+            compact
+            label={listLoading ? "Loading attendance" : "Updating results"}
+            hint={
+              listLoading
+                ? "Fetching attendance logs…"
+                : "Applying your search and filters…"
+            }
+          />
+        ) : (
         <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
           <table className="min-w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-[var(--border)] bg-[var(--panel-soft)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
+                <th className="w-12 px-3 py-2.5 font-semibold">#</th>
                 <th className="px-3 py-2.5 font-semibold">Date</th>
                 <th className="px-3 py-2.5 font-semibold">Status</th>
                 <th className="px-3 py-2.5 font-semibold">Check In</th>
@@ -709,14 +767,17 @@ export function AttendanceView() {
                         <span className="text-[12px]">Loading attendance logs…</span>
                       </div>
                     ) : filterActive ? (
-                      `No ${statusFilter} records for this month.`
+                      `No ${
+                        statusFilterOptions.find((o) => o.value === statusFilter)
+                          ?.label || statusFilter
+                      } records for this month.`
                     ) : (
                       "No attendance logs for this period."
                     )}
                   </td>
                 </tr>
               ) : (
-                displayRows.map((row) => {
+                displayRows.map((row, index) => {
                   const late = Number(row.lateMinutes) || 0;
                   const early = Number(row.earlyExitMinutes) || 0;
                   const ot = Number(row.overtimeHours) || 0;
@@ -736,20 +797,18 @@ export function AttendanceView() {
                       key={row.logId}
                       className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-soft)]/70"
                     >
+                      <td className="px-3 py-3 tabular-nums text-[var(--muted)]">
+                        {rowSerial(index, currentPage, pageLimit)}
+                      </td>
                       <td className="whitespace-nowrap px-3 py-3 font-medium text-[var(--text)]">
                         {formatDate(row.attendanceDate)}
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex flex-col gap-1">
-                          <span
-                            className="inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
-                            style={{
-                              backgroundColor: `${row.colorCode || "#a78af9"}22`,
-                              color: row.colorCode || "var(--violet)",
-                            }}
-                          >
-                            {row.attTypeName || row.statusLabel || "—"}
-                          </span>
+                          <AttendanceTypeBadge
+                            row={row}
+                            types={attendanceTypes}
+                          />
                           {flags.length ? (
                             <span className="text-[10px] text-[var(--muted)]">
                               {flags.join(" · ")}
@@ -844,6 +903,7 @@ export function AttendanceView() {
             </tbody>
           </table>
         </div>
+        )}
 
         <div className="mt-4 flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[12px] text-[var(--muted)]">

@@ -7,6 +7,8 @@ import {
   LayoutDashboard,
   UserRound,
   CalendarCheck2,
+  CalendarClock,
+  Clock3,
   Palmtree,
   Inbox,
   Receipt,
@@ -24,6 +26,8 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/profile", label: "My Profile", icon: UserRound },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck2 },
+  { href: "/shift", label: "My Shift", icon: Clock3 },
+  { href: "/roster", label: "Shift Roster", icon: CalendarClock },
   { href: "/leave", label: "Leave", icon: Palmtree },
   {
     href: "/requests",

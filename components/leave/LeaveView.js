@@ -24,17 +24,15 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FlashBanner } from "@/components/ui/FlashBanner";
+import {
+  ListFiltersBar,
+  REQUEST_STATUS_OPTIONS,
+} from "@/components/ui/ListFilters";
 import { PageLoader } from "@/components/ui/Spinner";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { useLeavePage } from "@/hooks/useLeave";
-import { formatDate, formatDateTime } from "@/lib/format";
-
-const STATUS_FILTERS = [
-  { value: "all", label: "All" },
-  { value: "pending", label: "Pending" },
-  { value: "approved", label: "Approved" },
-  { value: "cancelled", label: "Cancel" },
-];
+import { useLeaveTypes } from "@/hooks/useLeaveTypes";
+import { formatDate, formatDateTime, rowSerial } from "@/lib/format";
 
 const fieldClass =
   "mt-1.5 h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]";
@@ -74,9 +72,26 @@ function emptyEncashForm() {
   };
 }
 
-function leaveTypeName(balances, leaveTypeId) {
-  const row = (balances || []).find((b) => b.leaveTypeId === leaveTypeId);
+function leaveTypeName(leaveTypeId, types = [], balances = []) {
+  const fromType = (types || []).find(
+    (t) => String(t.id || t.leaveTypeId) === String(leaveTypeId)
+  );
+  if (fromType?.text || fromType?.leaveTypeName) {
+    return fromType.text || fromType.leaveTypeName;
+  }
+  const row = (balances || []).find(
+    (b) => String(b.leaveTypeId) === String(leaveTypeId)
+  );
   return row?.leaveTypeName || "—";
+}
+
+function daysBetweenInclusive(fromDate, toDate) {
+  if (!fromDate || !toDate) return null;
+  const a = new Date(`${fromDate}T00:00:00`);
+  const b = new Date(`${toDate}T00:00:00`);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+  const diff = Math.round((b - a) / 86400000) + 1;
+  return diff > 0 ? diff : null;
 }
 
 function toDateInputValue(iso) {
@@ -116,30 +131,6 @@ function StatusPill({ status, label }) {
     >
       {label || status || "—"}
     </span>
-  );
-}
-
-function FilterPills({ value, onChange }) {
-  return (
-    <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] p-1">
-      {STATUS_FILTERS.map((item) => {
-        const active = value === item.value;
-        return (
-          <button
-            key={item.value}
-            type="button"
-            onClick={() => onChange(item.value)}
-            className={`rounded-xl px-3 py-1.5 text-[12px] font-semibold transition ${
-              active
-                ? "bg-[var(--surface)] text-[var(--violet)] shadow-[var(--card-shadow)]"
-                : "text-[var(--muted)] hover:text-[var(--text)]"
-            }`}
-          >
-            {item.label}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -286,7 +277,7 @@ function LeaveMetricCard({
   );
 }
 
-function BalanceCard({ row, fiscalYear, onApply, onView }) {
+function BalanceCard({ row, fiscalYear, onApply, onView, leaveTypes = [] }) {
   const remaining = Number(row.remaining) || 0;
   const used = Number(row.used) || 0;
   const pending = Number(row.pending) || 0;
@@ -294,11 +285,12 @@ function BalanceCard({ row, fiscalYear, onApply, onView }) {
   const carry = Number(row.carryForward) || 0;
   const pool = allocated + carry;
   const color = row.colorCode || "#7b39ec";
+  const title = leaveTypeName(row.leaveTypeId, leaveTypes, [row]);
 
   return (
     <LeaveMetricCard
       icon={CalendarDays}
-      title={row.leaveTypeName}
+      title={title}
       description={`FY ${row.fiscalYear ?? fiscalYear} · Pool ${num(pool)} days (alloc ${num(allocated)}${carry ? ` + CF ${num(carry)}` : ""}).`}
       color={color}
       primaryLabel="Available"
@@ -511,6 +503,12 @@ export function LeaveView({ initialTab = "requests" }) {
     cancelEncashment,
   } = useLeavePage();
 
+  const {
+    types: leaveTypes,
+    filterOptions: leaveTypeFilterOptions,
+    loading: leaveTypesLoading,
+  } = useLeaveTypes();
+
   const [mainTab, setMainTab] = useState(() =>
     initialTab === "encashment" ? "encashment" : "requests"
   );
@@ -528,6 +526,12 @@ export function LeaveView({ initialTab = "requests" }) {
   const [encashSaving, setEncashSaving] = useState(false);
   const [encashCancellingId, setEncashCancellingId] = useState("");
   const [encashDetail, setEncashDetail] = useState(null);
+  const [listQuery, setListQuery] = useState("");
+  const [leaveTypeFilter, setLeaveTypeFilter] = useState("all");
+  const [encashQuery, setEncashQuery] = useState("");
+  const [encashTypeFilter, setEncashTypeFilter] = useState("all");
+  const [leaveFilterBusy, setLeaveFilterBusy] = useState(false);
+  const [encashFilterBusy, setEncashFilterBusy] = useState(false);
 
   const yearOptions = useMemo(() => {
     const y = new Date().getFullYear();
@@ -563,10 +567,108 @@ export function LeaveView({ initialTab = "requests" }) {
     [balances, form.leaveTypeId]
   );
 
+  const selectedLeaveType = useMemo(
+    () =>
+      leaveTypes.find(
+        (t) => String(t.id || t.leaveTypeId) === String(form.leaveTypeId)
+      ) || null,
+    [leaveTypes, form.leaveTypeId]
+  );
+
   const requestTotal = Number(meta?.total) || 0;
   const requestPages = Math.max(1, Number(meta?.totalPages) || 1);
   const encashTotal = Number(encashMeta?.total) || 0;
   const encashPages = Math.max(1, Number(encashMeta?.totalPages) || 1);
+
+  const leaveTypeOptions = useMemo(() => {
+    if (leaveTypeFilterOptions.length > 1) return leaveTypeFilterOptions;
+    // Fallback while dropdown loads / fails: balances + requests
+    const map = new Map();
+    for (const row of balances || []) {
+      if (row.leaveTypeId) {
+        map.set(String(row.leaveTypeId), row.leaveTypeName || "Leave type");
+      }
+    }
+    for (const row of requests || []) {
+      const id = row.leaveTypeId;
+      if (id && !map.has(String(id))) {
+        map.set(String(id), row.leaveTypeName || "Leave type");
+      }
+    }
+    return [
+      { value: "all", label: "All leave types" },
+      ...Array.from(map.entries()).map(([value, label]) => ({ value, label })),
+    ];
+  }, [leaveTypeFilterOptions, balances, requests]);
+
+  const applyTypeOptions = useMemo(() => {
+    if (leaveTypes.length) {
+      return leaveTypes.map((t) => {
+        const bal = (balances || []).find(
+          (b) => String(b.leaveTypeId) === String(t.id)
+        );
+        return {
+          id: t.id,
+          label: bal
+            ? `${t.text} · ${Number(bal.remaining)} left`
+            : t.text,
+        };
+      });
+    }
+    return (balances || []).map((row) => ({
+      id: row.leaveTypeId,
+      label: `${row.leaveTypeName} · ${Number(row.remaining)} left`,
+    }));
+  }, [leaveTypes, balances]);
+
+  const filteredRequests = useMemo(() => {
+    const q = listQuery.trim().toLowerCase();
+    return (requests || []).filter((row) => {
+      if (
+        leaveTypeFilter !== "all" &&
+        String(row.leaveTypeId || "") !== leaveTypeFilter
+      ) {
+        return false;
+      }
+      if (!q) return true;
+      const hay = [
+        row.leaveTypeName,
+        row.reason,
+        row.status,
+        row.statusLabel,
+        row.fromDate,
+        row.toDate,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [requests, listQuery, leaveTypeFilter]);
+
+  const filteredEncashRows = useMemo(() => {
+    const q = encashQuery.trim().toLowerCase();
+    return (encashRows || []).filter((row) => {
+      if (
+        encashTypeFilter !== "all" &&
+        String(row.leaveTypeId || "") !== encashTypeFilter
+      ) {
+        return false;
+      }
+      if (!q) return true;
+      const hay = [
+        row.leaveTypeName,
+        row.remarks,
+        row.reason,
+        row.status,
+        row.statusLabel,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [encashRows, encashQuery, encashTypeFilter]);
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -618,6 +720,43 @@ export function LeaveView({ initialTab = "requests" }) {
       }
       if (form.isFirstHalf && form.isSecondHalf) {
         throw new Error("Choose either first half or second half, not both.");
+      }
+
+      const policy =
+        leaveTypes.find(
+          (t) => String(t.id) === String(form.leaveTypeId)
+        ) || null;
+      const spanDays = daysBetweenInclusive(form.fromDate, form.toDate);
+      if (policy && spanDays != null) {
+        if (
+          policy.minDuration != null &&
+          Number(policy.minDuration) > 0 &&
+          spanDays < Number(policy.minDuration)
+        ) {
+          throw new Error(
+            `Minimum duration for ${policy.text} is ${policy.minDuration} day(s).`
+          );
+        }
+        if (
+          policy.maxDuration != null &&
+          Number(policy.maxDuration) > 0 &&
+          spanDays > Number(policy.maxDuration)
+        ) {
+          throw new Error(
+            `Maximum duration for ${policy.text} is ${policy.maxDuration} day(s).`
+          );
+        }
+      }
+      if (policy?.advanceNoticeDays != null && Number(policy.advanceNoticeDays) > 0) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const from = new Date(`${form.fromDate}T00:00:00`);
+        const notice = Math.round((from - today) / 86400000);
+        if (notice < Number(policy.advanceNoticeDays)) {
+          throw new Error(
+            `${policy.text} requires at least ${policy.advanceNoticeDays} day(s) advance notice.`
+          );
+        }
       }
 
       const payload = {
@@ -916,6 +1055,7 @@ export function LeaveView({ initialTab = "requests" }) {
                 key={row.balanceId || row.leaveTypeId}
                 row={row}
                 fiscalYear={fiscalYear}
+                leaveTypes={leaveTypes}
                 onApply={openApply}
                 onView={setBalanceDetail}
               />
@@ -1001,24 +1141,43 @@ export function LeaveView({ initialTab = "requests" }) {
         <div className="p-4 md:p-5">
           {mainTab === "requests" ? (
             <>
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <FilterPills value={status} onChange={setStatusFilter} />
+              <div className="mb-4">
+                <ListFiltersBar
+                  search={listQuery}
+                  onSearchChange={setListQuery}
+                  searchPlaceholder="Search leave type, reason, status…"
+                  status={status}
+                  onStatusChange={setStatusFilter}
+                  statusOptions={REQUEST_STATUS_OPTIONS}
+                  type={leaveTypeFilter}
+                  onTypeChange={setLeaveTypeFilter}
+                  typeOptions={leaveTypeOptions}
+                  typeLabel="Leave type"
+                  loading={requestsLoading}
+                  onBusyChange={setLeaveFilterBusy}
+                />
               </div>
 
-              {requestsLoading && requests.length === 0 ? (
+              {requestsLoading || leaveFilterBusy ? (
                 <PageLoader
                   compact
-                  label="Loading requests"
-                  hint="Fetching leave requests…"
+                  label={
+                    requestsLoading ? "Loading requests" : "Updating results"
+                  }
+                  hint={
+                    requestsLoading
+                      ? "Fetching leave requests…"
+                      : "Applying your search and filters…"
+                  }
                 />
-              ) : requests.length === 0 ? (
+              ) : filteredRequests.length === 0 ? (
                 <EmptyState
                   icon={Inbox}
                   title="No leave requests"
                   hint={
-                    status === "all"
+                    status === "all" && !listQuery && leaveTypeFilter === "all"
                       ? "When you apply for leave, your requests will show up here."
-                      : `No ${status} requests in this view.`
+                      : "No requests match these filters."
                   }
                   action={
                     <Button
@@ -1036,6 +1195,7 @@ export function LeaveView({ initialTab = "requests" }) {
                   <table className="min-w-full text-left text-[13px]">
                     <thead>
                       <tr className="border-b border-[var(--border)] bg-[var(--panel-soft)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
+                        <th className="w-12 px-3 py-2.5 font-semibold">#</th>
                         <th className="px-3 py-2.5 font-semibold">Leave type</th>
                         <th className="px-3 py-2.5 font-semibold">From</th>
                         <th className="px-3 py-2.5 font-semibold">To</th>
@@ -1047,7 +1207,7 @@ export function LeaveView({ initialTab = "requests" }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {requests.map((row) => {
+                      {filteredRequests.map((row, index) => {
                         const requestId =
                           row.requestId || row.id || row.leaveRequestId;
                         const isPending =
@@ -1063,9 +1223,16 @@ export function LeaveView({ initialTab = "requests" }) {
                             key={requestId}
                             className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-soft)]/70"
                           >
+                            <td className="px-3 py-3 tabular-nums text-[var(--muted)]">
+                              {rowSerial(index, page, limit)}
+                            </td>
                             <td className="px-3 py-3 font-medium text-[var(--text)]">
                               {row.leaveTypeName ||
-                                leaveTypeName(balances, row.leaveTypeId)}
+                                leaveTypeName(
+                                  row.leaveTypeId,
+                                  leaveTypes,
+                                  balances
+                                )}
                               {half ? (
                                 <span className="text-[11px] text-[var(--muted)]">
                                   {half}
@@ -1155,26 +1322,50 @@ export function LeaveView({ initialTab = "requests" }) {
                 />
               ) : (
                 <>
-                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <FilterPills
-                      value={encashStatus}
-                      onChange={setEncashStatusFilter}
+                  <div className="mb-4">
+                    <ListFiltersBar
+                      search={encashQuery}
+                      onSearchChange={setEncashQuery}
+                      searchPlaceholder="Search leave type, remarks, status…"
+                      status={encashStatus}
+                      onStatusChange={setEncashStatusFilter}
+                      statusOptions={REQUEST_STATUS_OPTIONS}
+                      type={encashTypeFilter}
+                      onTypeChange={setEncashTypeFilter}
+                      typeOptions={leaveTypeOptions}
+                      typeLabel="Leave type"
+                      loading={encashLoading}
+                      onBusyChange={setEncashFilterBusy}
                     />
-                    {encashLoading ? (
-                      <span className="text-[12px] text-[var(--muted)]">
-                        Loading…
-                      </span>
-                    ) : (
-                      <span className="text-[12px] text-[var(--muted)]">
-                        {encashTotal} total
-                      </span>
-                    )}
+                    <p className="mt-2 text-[12px] text-[var(--muted)]">
+                      {encashLoading || encashFilterBusy
+                        ? "Updating…"
+                        : `${filteredEncashRows.length} shown · ${encashTotal} total`}
+                    </p>
                   </div>
-                  {encashRows.length === 0 ? (
+                  {encashLoading || encashFilterBusy ? (
+                    <PageLoader
+                      compact
+                      label={
+                        encashLoading
+                          ? "Loading encashment"
+                          : "Updating results"
+                      }
+                      hint={
+                        encashLoading
+                          ? "Fetching encashment requests…"
+                          : "Applying your search and filters…"
+                      }
+                    />
+                  ) : filteredEncashRows.length === 0 ? (
                     <EmptyState
                       icon={Banknote}
                       title="No encashment requests"
-                      hint="Convert unused leave days to salary when your policy allows it."
+                      hint={
+                        encashRows.length === 0
+                          ? "Convert unused leave days to salary when your policy allows it."
+                          : "No requests match these filters."
+                      }
                       action={
                         <Button
                           type="button"
@@ -1196,6 +1387,7 @@ export function LeaveView({ initialTab = "requests" }) {
                       <table className="min-w-full text-left text-[13px]">
                         <thead>
                           <tr className="border-b border-[var(--border)] bg-[var(--panel-soft)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
+                            <th className="w-12 px-3 py-2.5 font-semibold">#</th>
                             <th className="px-3 py-2.5 font-semibold">
                               Leave type
                             </th>
@@ -1219,7 +1411,7 @@ export function LeaveView({ initialTab = "requests" }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {encashRows.map((row) => {
+                          {filteredEncashRows.map((row, index) => {
                             const id =
                               row.encashmentId || row.requestId || row.id;
                             const isPending =
@@ -1235,9 +1427,16 @@ export function LeaveView({ initialTab = "requests" }) {
                                 key={id}
                                 className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-soft)]/60"
                               >
+                                <td className="px-3 py-3 tabular-nums text-[var(--muted)]">
+                                  {rowSerial(index, encashPage, encashLimit)}
+                                </td>
                                 <td className="px-3 py-3 font-medium text-[var(--text)]">
                                   {row.leaveTypeName ||
-                                    leaveTypeName(balances, row.leaveTypeId)}
+                                    leaveTypeName(
+                                  row.leaveTypeId,
+                                  leaveTypes,
+                                  balances
+                                )}
                                 </td>
                                 <td className="px-3 py-3 tabular-nums text-[var(--text)]">
                                   {row.daysToEncash ?? row.days ?? "—"}
@@ -1327,30 +1526,66 @@ export function LeaveView({ initialTab = "requests" }) {
               value={form.leaveTypeId}
               onChange={(e) => setField("leaveTypeId", e.target.value)}
               required
+              disabled={leaveTypesLoading && !applyTypeOptions.length}
             >
-              <option value="">Select leave type</option>
-              {balances.map((row) => (
-                <option key={row.leaveTypeId} value={row.leaveTypeId}>
-                  {row.leaveTypeName} · {num(row.remaining)} left
+              <option value="">
+                {leaveTypesLoading
+                  ? "Loading leave types…"
+                  : "Select leave type"}
+              </option>
+              {applyTypeOptions.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.label}
                 </option>
               ))}
             </select>
           </label>
 
-          {selectedBalance ? (
-            <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] px-3.5 py-3">
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ background: selectedBalance.colorCode }}
-                />
-                <span className="text-[12px] text-[var(--muted)]">
-                  Available balance
-                </span>
-              </div>
-              <span className="text-[15px] font-bold tabular-nums text-[var(--violet)]">
-                {num(selectedBalance.remaining)} days
-              </span>
+          {selectedLeaveType || selectedBalance ? (
+            <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] px-3.5 py-3">
+              {selectedBalance ? (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{
+                        background:
+                          selectedBalance.colorCode || "var(--violet)",
+                      }}
+                    />
+                    <span className="text-[12px] text-[var(--muted)]">
+                      Available balance
+                    </span>
+                  </div>
+                  <span className="text-[15px] font-bold tabular-nums text-[var(--violet)]">
+                    {num(selectedBalance.remaining)} days
+                  </span>
+                </div>
+              ) : null}
+              {selectedLeaveType ? (
+                <div className="flex flex-wrap gap-1.5 pt-0.5 text-[11px] text-[var(--muted)]">
+                  {selectedLeaveType.minDuration != null ? (
+                    <span className="rounded-md bg-[var(--surface)] px-2 py-0.5">
+                      Min {selectedLeaveType.minDuration}d
+                    </span>
+                  ) : null}
+                  {selectedLeaveType.maxDuration != null ? (
+                    <span className="rounded-md bg-[var(--surface)] px-2 py-0.5">
+                      Max {selectedLeaveType.maxDuration}d
+                    </span>
+                  ) : null}
+                  {selectedLeaveType.advanceNoticeDays != null ? (
+                    <span className="rounded-md bg-[var(--surface)] px-2 py-0.5">
+                      Notice {selectedLeaveType.advanceNoticeDays}d
+                    </span>
+                  ) : null}
+                  {selectedLeaveType.allowNegativeBalance ? (
+                    <span className="rounded-md bg-[var(--warning-soft)] px-2 py-0.5 text-[var(--warning)]">
+                      Negative balance allowed
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -1483,7 +1718,15 @@ export function LeaveView({ initialTab = "requests" }) {
       <SlideOver
         open={Boolean(balanceDetail)}
         onClose={() => setBalanceDetail(null)}
-        title={balanceDetail?.leaveTypeName || "Leave balance"}
+        title={
+          balanceDetail
+            ? leaveTypeName(
+                balanceDetail.leaveTypeId,
+                leaveTypes,
+                [balanceDetail]
+              )
+            : "Leave balance"
+        }
         subtitle={`FY ${balanceDetail?.fiscalYear ?? fiscalYear}`}
       >
         {balanceDetail ? (
@@ -1544,7 +1787,11 @@ export function LeaveView({ initialTab = "requests" }) {
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[15px] font-semibold text-[var(--text)]">
                   {detail.leaveTypeName ||
-                    leaveTypeName(balances, detail.leaveTypeId)}
+                    leaveTypeName(
+                      detail.leaveTypeId,
+                      leaveTypes,
+                      balances
+                    )}
                 </p>
                 <StatusPill
                   status={detail.status}
@@ -1660,7 +1907,11 @@ export function LeaveView({ initialTab = "requests" }) {
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[15px] font-semibold text-[var(--text)]">
                   {encashDetail.leaveTypeName ||
-                    leaveTypeName(balances, encashDetail.leaveTypeId)}
+                    leaveTypeName(
+                      encashDetail.leaveTypeId,
+                      leaveTypes,
+                      balances
+                    )}
                 </p>
                 <StatusPill
                   status={encashDetail.status}
@@ -1765,11 +2016,14 @@ export function LeaveView({ initialTab = "requests" }) {
               value={encashForm.leaveTypeId}
               onChange={(e) => setEncashField("leaveTypeId", e.target.value)}
               required
+              disabled={leaveTypesLoading && !applyTypeOptions.length}
             >
-              <option value="">Select</option>
-              {balances.map((row) => (
-                <option key={row.leaveTypeId} value={row.leaveTypeId}>
-                  {row.leaveTypeName} · {num(row.remaining)} left
+              <option value="">
+                {leaveTypesLoading ? "Loading…" : "Select"}
+              </option>
+              {applyTypeOptions.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.label}
                 </option>
               ))}
             </select>

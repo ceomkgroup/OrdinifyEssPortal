@@ -1,12 +1,22 @@
 "use client";
 
-import { RequestComingSoon } from "@/components/requests/RequestComingSoon";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ShiftChangeView } from "@/components/requests/ShiftChangeView";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { ComingSoon } from "@/components/ui/ComingSoon";
 import { PageLoader } from "@/components/ui/Spinner";
+import { useDashboard } from "@/hooks/useDashboard";
 
-export default function ShiftChangeRequestPage() {
+function ShiftChangeContent() {
   const { canShowRequestTile, loading } = useModules();
+  const { data } = useDashboard();
+  const searchParams = useSearchParams();
+  const settings = data?.companySettings || {};
+  // Capture once — avoid URL replace remounts that re-fire all APIs
+  const [openFormOnce] = useState(
+    () => searchParams?.get("new") === "1"
+  );
 
   if (loading) {
     return (
@@ -24,9 +34,22 @@ export default function ShiftChangeRequestPage() {
   }
 
   return (
-    <RequestComingSoon
-      title="Shift Change"
-      description="Request a change to your assigned shift."
+    <ShiftChangeView
+      timeFormat={settings.timeFormat || "12h"}
+      dateFormat={settings.dateFormat || "DD/MM/YYYY"}
+      initialOpenForm={openFormOnce}
     />
+  );
+}
+
+export default function ShiftChangeRequestPage() {
+  return (
+    <Suspense
+      fallback={
+        <PageLoader label="Loading" hint="Opening shift change…" />
+      }
+    >
+      <ShiftChangeContent />
+    </Suspense>
   );
 }
