@@ -240,7 +240,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   const uploadPhoto = useCallback(async (file) => {
-    const updated = await uploadProfilePhotoApi(file);
+    const updated = await uploadProfilePhotoApi(
+      file,
+      employee?.employeeId || employee?.id || undefined
+    );
     const profile =
       pickEmployee(updated) ||
       pickEmployee(updated?.data) ||
@@ -259,7 +262,7 @@ export function AuthProvider({ children }) {
     }
 
     return refreshProfile();
-  }, [refreshProfile]);
+  }, [employee?.employeeId, employee?.id, refreshProfile]);
 
   const forgotPassword = useCallback(async ({ email }) => {
     return forgotPasswordApi({ email });

@@ -14,6 +14,7 @@ import {
   Receipt,
   Users,
   CalendarDays,
+  Megaphone,
   BarChart3,
   Settings,
   ChevronDown,
@@ -38,6 +39,7 @@ const NAV = [
   { href: "/payslip", label: "Payslip", icon: Receipt },
   { href: "/team", label: "Team", icon: Users },
   { href: "/holidays", label: "Holidays", icon: CalendarDays },
+  { href: "/announcements", label: "Announcements", icon: Megaphone },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

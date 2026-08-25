@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { getAttendanceHistoryAll } from "@/api/attendance";
 import { AttendanceTypeBadge } from "@/components/attendance/AttendanceTypeBadge";
+import { AttendancePolicyCard } from "@/components/attendance/AttendancePolicyCard";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -595,6 +596,8 @@ export function AttendanceView() {
           </Card>
         ) : null}
       </div>
+
+      <AttendancePolicyCard />
 
       <Card
         title={`Monthly Summary (${formatMonthYear(year, month)})`}

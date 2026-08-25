@@ -19,7 +19,7 @@ import { useModules } from "@/components/modules/ModulesProvider";
 import { Button } from "@/components/ui/Button";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { PageLoader } from "@/components/ui/Spinner";
-import { useDashboard } from "@/hooks/useDashboard";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useMyShift } from "@/hooks/useMyShift";
 import { formatDate, formatTime } from "@/lib/format";
 
@@ -64,12 +64,12 @@ function DetailCell({ icon: Icon, label, value, valueNode }) {
 
 export function MyShiftView() {
   const { shift, loading, error, refetch } = useMyShift();
-  const { data: dash } = useDashboard();
+  const { settings } = useCompanySettings();
   const { canShowRequestTile } = useModules();
   const canRequestChange = canShowRequestTile("shiftChange");
 
-  const timeFormat = dash?.companySettings?.timeFormat || "12h";
-  const dateFormat = dash?.companySettings?.dateFormat || "DD/MM/YYYY";
+  const timeFormat = settings.timeFormat || "12h";
+  const dateFormat = settings.dateFormat || "DD/MM/YYYY";
 
   if (loading && !shift) {
     return (

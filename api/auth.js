@@ -80,15 +80,7 @@ export async function resetPassword(payload) {
 }
 
 /**
- * Upload photo via PATCH /api/employee/auth/profile (multipart).
+ * Upload photo via portal upload + profile PATCH.
+ * Kept for AuthProvider compatibility.
  */
-export async function uploadProfilePhoto(file) {
-  const form = new FormData();
-  form.append("photo", file);
-
-  const { data } = await api.patch("/api/employee/auth/profile", form);
-  if (!data?.success) {
-    throw new Error(data?.message || "Failed to upload photo");
-  }
-  return data.data || data;
-}
+export { uploadPortalProfilePhoto as uploadProfilePhoto } from "@/api/portal";

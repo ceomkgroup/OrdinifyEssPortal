@@ -30,6 +30,7 @@ import { formatTime, formatWorkedTimer } from "@/lib/format";
 import { canWebPunch as canWebPunchPermission } from "@/lib/permissions";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { AttendanceTypeBadge } from "@/components/attendance/AttendanceTypeBadge";
+import { useAttendancePolicy } from "@/hooks/useAttendancePolicy";
 import { useAttendanceTypes } from "@/hooks/useAttendanceTypes";
 
 function parseShiftMinutes(time24) {
@@ -144,11 +145,13 @@ export function PunchWidget({
   onBreakChanged,
 }) {
   const { hasFlag } = useModules();
+  const { policy: attendancePolicy } = useAttendancePolicy();
   const breakEnabled = canShowBreakManagement({
     breakManagementEnabled: hasFlag("breakManagement"),
     today: todayAttendance,
     punchPermissions,
     employee,
+    attendancePolicy,
   });
 
   const [now, setNow] = useState(() => new Date());
@@ -196,8 +199,11 @@ export function PunchWidget({
   const requireGps = geofenceActive && geofence?.requireGpsForPunch === true;
 
   const breakPolicy = useMemo(
-    () => (breakEnabled ? getBreakPolicy(todayAttendance, shift) : null),
-    [breakEnabled, todayAttendance, shift]
+    () =>
+      breakEnabled
+        ? getBreakPolicy(todayAttendance, shift, attendancePolicy)
+        : null,
+    [breakEnabled, todayAttendance, shift, attendancePolicy]
   );
   const breakLogs = breakPolicy?.logs || [];
   const activeBreakStart = getActiveBreakStart(todayAttendance, isOnBreak);

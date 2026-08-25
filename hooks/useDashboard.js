@@ -8,12 +8,12 @@ export function useDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const load = useCallback(async (options = { showLoader: true }) => {
+  const load = useCallback(async (options = { showLoader: true, force: false }) => {
     if (options.showLoader) setLoading(true);
     setError(null);
 
     try {
-      const result = await getPortalDashboard();
+      const result = await getPortalDashboard({ force: Boolean(options.force) });
       setData(result);
       return result;
     } catch (err) {
@@ -52,6 +52,6 @@ export function useDashboard() {
     data,
     loading,
     error,
-    refetch: () => load({ showLoader: true }),
+    refetch: () => load({ showLoader: true, force: true }),
   };
 }

@@ -144,8 +144,11 @@ export function useAttendancePage() {
   };
 }
 
-/** Lightweight fetch for dashboard widgets */
-export function useAttendanceLive() {
+/** Lightweight helpers for dashboard punch — uses dashboard payload first. */
+export function useAttendanceLive({
+  fetchTodayOnMount = false,
+  fetchSummaryOnMount = false,
+} = {}) {
   const { hasFlag } = useModules();
   const geofenceEnabled = hasFlag("geofence");
 
@@ -160,25 +163,42 @@ export function useAttendanceLive() {
     (async () => {
       try {
         const current = new Date();
-        const requests = [
-          getAttendanceToday(),
-          getAttendanceMonthlySummary({
-            year: current.getFullYear(),
-            month: current.getMonth() + 1,
-          }),
-        ];
+        const requests = [];
+        const kinds = [];
 
+        if (fetchTodayOnMount || reloadTick > 0) {
+          requests.push(getAttendanceToday());
+          kinds.push("today");
+        }
+        if (fetchSummaryOnMount || reloadTick > 0) {
+          requests.push(
+            getAttendanceMonthlySummary({
+              year: current.getFullYear(),
+              month: current.getMonth() + 1,
+            })
+          );
+          kinds.push("summary");
+        }
         if (geofenceEnabled) {
           requests.push(getAttendanceGeofenceInfo().catch(() => null));
+          kinds.push("geo");
         }
 
-        const [todayRes, summaryRes, geoRes] = await Promise.all(requests);
+        if (!requests.length) {
+          if (alive) setLoading(false);
+          return;
+        }
+
+        const results = await Promise.all(requests);
         if (!alive) return;
-        setToday(todayRes.today);
-        setSummary(summaryRes);
-        setGeofence(geofenceEnabled ? geoRes || null : null);
+
+        kinds.forEach((kind, i) => {
+          if (kind === "today") setToday(results[i]?.today);
+          if (kind === "summary") setSummary(results[i]);
+          if (kind === "geo") setGeofence(results[i] || null);
+        });
+        if (!geofenceEnabled) setGeofence(null);
       } catch {
-        // Dashboard can fall back to portal dashboard payload.
         if (alive) setGeofence(null);
       } finally {
         if (alive) setLoading(false);
@@ -187,7 +207,7 @@ export function useAttendanceLive() {
     return () => {
       alive = false;
     };
-  }, [reloadTick, geofenceEnabled]);
+  }, [reloadTick, geofenceEnabled, fetchTodayOnMount, fetchSummaryOnMount]);
 
   const refetch = useCallback(() => {
     setLoading(true);

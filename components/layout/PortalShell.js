@@ -5,14 +5,20 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { getPortalProfile } from "@/api/portal";
+import {
+  AnnouncementsBadgeProvider,
+  useAnnouncementsBadge,
+} from "@/components/announcements/AnnouncementsBadgeContext";
 
-export function PortalShell({ children, employee, companySettings }) {
+function PortalShellInner({ children, employee, companySettings }) {
   const { employee: authEmployee, mergeLocalEmployee } = useAuth();
+  const { unreadCount } = useAnnouncementsBadge();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const profile = employee || authEmployee;
 
   // Keep header name / designation / photo in sync with portal profile.
+  // Only when auth cache is incomplete — avoids a profile call on every visit.
   useEffect(() => {
     let alive = true;
     const needsHydrate = !profile?.designationName || !profile?.firstName;
@@ -57,6 +63,7 @@ export function PortalShell({ children, employee, companySettings }) {
           employee={profile}
           timezone={companySettings?.timezone}
           sidebarCollapsed={desktopCollapsed}
+          notificationCount={unreadCount}
           onMenuClick={() => {
             if (typeof window !== "undefined" && window.innerWidth >= 1024) {
               setDesktopCollapsed((value) => !value);
@@ -70,5 +77,15 @@ export function PortalShell({ children, employee, companySettings }) {
         </main>
       </div>
     </div>
+  );
+}
+
+export function PortalShell({ children, employee, companySettings }) {
+  return (
+    <AnnouncementsBadgeProvider>
+      <PortalShellInner employee={employee} companySettings={companySettings}>
+        {children}
+      </PortalShellInner>
+    </AnnouncementsBadgeProvider>
   );
 }

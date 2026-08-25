@@ -54,10 +54,13 @@ export function usePortalProfile() {
   }, []);
 
   const uploadPhoto = useCallback(async (file) => {
-    const data = await uploadPortalProfilePhoto(file);
+    const data = await uploadPortalProfilePhoto(
+      file,
+      profile?.employeeId || profile?.id || undefined
+    );
     setProfile((prev) => ({ ...(prev || {}), ...(data || {}) }));
     return data;
-  }, []);
+  }, [profile?.employeeId, profile?.id]);
 
   return {
     profile,

@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listLeaveRequests, listEncashmentRequests } from "@/api/leave";
 import { listAttendanceChangeRequests } from "@/api/attendance-change";
+import { listCompOffRequests } from "@/api/comp-off";
+import { listOnDutyRequests } from "@/api/on-duty";
+import { listOvertimeRequests } from "@/api/overtime";
+import { listShiftChangeRequests } from "@/api/shift-change";
+import { listWfhRequests } from "@/api/wfh";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { formatDate } from "@/lib/format";
 import { getRequestTypeByKey } from "@/lib/request-types";
@@ -91,6 +96,135 @@ function mapAttendanceChangeRow(row) {
   };
 }
 
+function mapShiftChangeRow(row) {
+  const type = getRequestTypeByKey("shiftChange");
+  return {
+    id: `shiftChange:${row.requestId || row.id}`,
+    requestId: row.requestId || row.id,
+    typeKey: "shiftChange",
+    typeLabel: type?.title || "Shift Change",
+    href: type?.href || "/requests/shift-change",
+    summary: row.reason
+      ? String(row.reason).slice(0, 72)
+      : "Shift change request",
+    period: formatDate(row.effectiveDate) || "—",
+    status: row.statusLabel || row.status || "—",
+    statusBucket: statusBucket(row.status),
+    createdAt: row.createdAt || row.effectiveDate || null,
+    reason: row.reason || "",
+  };
+}
+
+function mapCompOffRow(row) {
+  const type = getRequestTypeByKey("compOff");
+  const hours = row.hoursWorked != null ? `${row.hoursWorked} hrs` : null;
+  return {
+    id: `compOff:${row.compOffId || row.requestId || row.id}`,
+    requestId: row.compOffId || row.requestId || row.id,
+    typeKey: "compOff",
+    typeLabel: type?.title || "Comp Off",
+    href: type?.href || "/requests/comp-off",
+    summary: row.reason
+      ? String(row.reason).slice(0, 72)
+      : hours
+        ? `Comp off · ${hours}`
+        : "Comp-off request",
+    period: formatDate(row.workDate) || "—",
+    status: row.statusLabel || row.status || "—",
+    statusBucket: statusBucket(row.status),
+    createdAt: row.createdAt || row.workDate || null,
+    reason: row.reason || "",
+  };
+}
+
+function formatOtSummaryMinutes(totalMinutes) {
+  if (totalMinutes == null || Number.isNaN(Number(totalMinutes))) return null;
+  const mins = Math.max(0, Math.round(Number(totalMinutes)));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
+
+function mapOvertimeRow(row) {
+  const type = getRequestTypeByKey("overtime");
+  const duration = formatOtSummaryMinutes(row.overtimeMinutes);
+  return {
+    id: `overtime:${row.otRequestId || row.requestId || row.id}`,
+    requestId: row.otRequestId || row.requestId || row.id,
+    typeKey: "overtime",
+    typeLabel: type?.title || "Overtime",
+    href: type?.href || "/requests/overtime",
+    summary: row.reason
+      ? String(row.reason).slice(0, 72)
+      : duration
+        ? `Overtime · ${duration}`
+        : "Overtime request",
+    period: formatDate(row.attendanceDate) || "—",
+    status: row.statusLabel || row.status || "—",
+    statusBucket: statusBucket(row.status),
+    createdAt: row.createdAt || row.attendanceDate || null,
+    reason: row.reason || "",
+  };
+}
+
+function mapWfhRow(row) {
+  const type = getRequestTypeByKey("wfh");
+  const from = row.fromDate;
+  const to = row.toDate;
+  const period =
+    from && to
+      ? from === to
+        ? formatDate(from)
+        : `${formatDate(from)} – ${formatDate(to)}`
+      : formatDate(from || to) || "—";
+  return {
+    id: `wfh:${row.wfhId || row.requestId || row.id}`,
+    requestId: row.wfhId || row.requestId || row.id,
+    typeKey: "wfh",
+    typeLabel: type?.title || "WFH Request",
+    href: type?.href || "/requests/wfh",
+    summary: row.reason
+      ? String(row.reason).slice(0, 72)
+      : "Work from home",
+    period,
+    status: row.statusLabel || row.status || "—",
+    statusBucket: statusBucket(row.status),
+    createdAt: row.createdAt || row.fromDate || null,
+    reason: row.reason || "",
+  };
+}
+
+function mapOnDutyRow(row) {
+  const type = getRequestTypeByKey("onDuty");
+  const from = row.fromDate;
+  const to = row.toDate;
+  const period =
+    from && to
+      ? from === to
+        ? formatDate(from)
+        : `${formatDate(from)} – ${formatDate(to)}`
+      : formatDate(from || to) || "—";
+  return {
+    id: `onDuty:${row.onDutyId || row.requestId || row.id}`,
+    requestId: row.onDutyId || row.requestId || row.id,
+    typeKey: "onDuty",
+    typeLabel: type?.title || "On Duty",
+    href: type?.href || "/requests/on-duty",
+    summary: row.purpose
+      ? String(row.purpose).slice(0, 72)
+      : row.location
+        ? String(row.location).slice(0, 72)
+        : "On-duty request",
+    period,
+    status: row.statusLabel || row.status || "—",
+    statusBucket: statusBucket(row.status),
+    createdAt: row.createdAt || row.fromDate || null,
+    reason: row.purpose || row.location || "",
+  };
+}
+
 /**
  * Aggregates live request types into one list for the All Requests hub.
  */
@@ -106,6 +240,11 @@ export function useAllRequests() {
     if (canShowRequestTile("leave")) list.push("leave");
     if (canShowRequestTile("encashment")) list.push("encashment");
     if (canShowRequestTile("attendanceChange")) list.push("attendanceChange");
+    if (canShowRequestTile("shiftChange")) list.push("shiftChange");
+    if (canShowRequestTile("compOff")) list.push("compOff");
+    if (canShowRequestTile("overtime")) list.push("overtime");
+    if (canShowRequestTile("wfh")) list.push("wfh");
+    if (canShowRequestTile("onDuty")) list.push("onDuty");
     return list;
   }, [canShowRequestTile]);
 
@@ -152,6 +291,51 @@ export function useAllRequests() {
               page: 1,
               limit: FETCH_LIMIT,
             }).then((res) => (res.rows || []).map(mapAttendanceChangeRow))
+          );
+        }
+        if (sourceList.includes("shiftChange")) {
+          tasks.push(
+            listShiftChangeRequests({
+              status: "all",
+              page: 1,
+              limit: FETCH_LIMIT,
+            }).then((res) => (res.rows || []).map(mapShiftChangeRow))
+          );
+        }
+        if (sourceList.includes("compOff")) {
+          tasks.push(
+            listCompOffRequests({
+              status: "all",
+              page: 1,
+              limit: FETCH_LIMIT,
+            }).then((res) => (res.rows || []).map(mapCompOffRow))
+          );
+        }
+        if (sourceList.includes("overtime")) {
+          tasks.push(
+            listOvertimeRequests({
+              status: "all",
+              page: 1,
+              limit: FETCH_LIMIT,
+            }).then((res) => (res.rows || []).map(mapOvertimeRow))
+          );
+        }
+        if (sourceList.includes("wfh")) {
+          tasks.push(
+            listWfhRequests({
+              status: "all",
+              page: 1,
+              limit: FETCH_LIMIT,
+            }).then((res) => (res.rows || []).map(mapWfhRow))
+          );
+        }
+        if (sourceList.includes("onDuty")) {
+          tasks.push(
+            listOnDutyRequests({
+              status: "all",
+              page: 1,
+              limit: FETCH_LIMIT,
+            }).then((res) => (res.rows || []).map(mapOnDutyRow))
           );
         }
 

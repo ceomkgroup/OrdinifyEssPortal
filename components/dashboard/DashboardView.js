@@ -19,12 +19,15 @@ import { useDashboard } from "@/hooks/useDashboard";
 import { useAttendanceLive } from "@/hooks/useAttendance";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useModules } from "@/components/modules/ModulesProvider";
-import { clearDashboardCache } from "@/api/portal";
+import { useAnnouncementsBadge } from "@/components/announcements/AnnouncementsBadgeContext";
+import { listAnnouncements } from "@/api/announcements";
 import { greetingByHour } from "@/lib/format";
+import { useEffect } from "react";
 
 export function DashboardView() {
   const { logout, employee: authEmployee } = useAuth();
   const { canShowWidget } = useModules();
+  const { syncFromRows } = useAnnouncementsBadge();
   const { data, loading, error, refetch } = useDashboard();
   const {
     today: liveToday,
@@ -35,7 +38,27 @@ export function DashboardView() {
     applyCheckInResult,
     applyCheckOutResult,
     applyBreakResult,
-  } = useAttendanceLive();
+  } = useAttendanceLive({
+    // Dashboard payload already has today + month — only geo on mount.
+    fetchTodayOnMount: false,
+    fetchSummaryOnMount: false,
+  });
+
+  // One announcements list for header unread badge (cached for announcements page).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await listAnnouncements({ page: 1, limit: 50 });
+        if (alive) syncFromRows(res.rows);
+      } catch {
+        // Badge can stay at 0.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [syncFromRows]);
 
   if (loading && !data) {
     return <PageLoader label="Loading dashboard" hint="Pulling your day overview…" />;
@@ -122,26 +145,21 @@ export function DashboardView() {
             shift={data.shift}
             punchPermissions={data.punchPermissions}
             employee={data.employee || authEmployee}
-            todayAttendance={liveToday}
+            todayAttendance={todayForUi}
             geofence={geofenceEnabled ? geofence : null}
             timeFormat={settings.timeFormat}
             onCheckedIn={(result) => {
               applyCheckInResult(result);
+              // Refresh today/month only — avoid a full dashboard reload.
               refetchAttendance();
-              clearDashboardCache();
-              refetch();
             }}
             onCheckedOut={(result) => {
               applyCheckOutResult(result);
               refetchAttendance();
-              clearDashboardCache();
-              refetch();
             }}
             onBreakChanged={(result, action) => {
               applyBreakResult(result, action);
               refetchAttendance();
-              clearDashboardCache();
-              refetch();
             }}
           />
         ) : null}

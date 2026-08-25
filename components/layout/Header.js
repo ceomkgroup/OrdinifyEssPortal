@@ -94,16 +94,19 @@ export function Header({
           )}
         </button>
 
-        <button
-          type="button"
+        <Link
+          href="/announcements"
           className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--lavender-soft)] hover:text-[var(--violet)]"
-          aria-label="Notifications"
+          aria-label="Announcements"
+          title="Announcements"
         >
           <Bell className="h-4 w-4" strokeWidth={1.8} />
-          <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-bold text-white">
-            {notificationCount}
-          </span>
-        </button>
+          {notificationCount > 0 ? (
+            <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-bold text-white">
+              {notificationCount > 99 ? "99+" : notificationCount}
+            </span>
+          ) : null}
+        </Link>
 
         <div className="relative" ref={menuRef}>
           <button

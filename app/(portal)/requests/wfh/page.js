@@ -1,12 +1,14 @@
 "use client";
 
-import { RequestComingSoon } from "@/components/requests/RequestComingSoon";
+import { WfhView } from "@/components/requests/WfhView";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { ComingSoon } from "@/components/ui/ComingSoon";
 import { PageLoader } from "@/components/ui/Spinner";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 export default function WfhRequestPage() {
   const { canShowRequestTile, loading } = useModules();
+  const { settings } = useCompanySettings();
 
   if (loading) {
     return (
@@ -24,9 +26,9 @@ export default function WfhRequestPage() {
   }
 
   return (
-    <RequestComingSoon
-      title="WFH Request"
-      description="Apply for work-from-home days."
+    <WfhView
+      timeFormat={settings.timeFormat || "12h"}
+      dateFormat={settings.dateFormat || "DD/MM/YYYY"}
     />
   );
 }

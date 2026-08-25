@@ -5,12 +5,11 @@ import { AttendanceChangeView } from "@/components/requests/AttendanceChangeView
 import { useModules } from "@/components/modules/ModulesProvider";
 import { ComingSoon } from "@/components/ui/ComingSoon";
 import { PageLoader } from "@/components/ui/Spinner";
-import { useDashboard } from "@/hooks/useDashboard";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 function AttendanceChangeContent() {
   const { hasScreen } = useModules();
-  const { data } = useDashboard();
-  const settings = data?.companySettings || {};
+  const { settings } = useCompanySettings();
 
   if (!hasScreen("attendanceChange")) {
     return (

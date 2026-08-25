@@ -6,13 +6,12 @@ import { ShiftChangeView } from "@/components/requests/ShiftChangeView";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { ComingSoon } from "@/components/ui/ComingSoon";
 import { PageLoader } from "@/components/ui/Spinner";
-import { useDashboard } from "@/hooks/useDashboard";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 function ShiftChangeContent() {
   const { canShowRequestTile, loading } = useModules();
-  const { data } = useDashboard();
+  const { settings } = useCompanySettings();
   const searchParams = useSearchParams();
-  const settings = data?.companySettings || {};
   // Capture once — avoid URL replace remounts that re-fire all APIs
   const [openFormOnce] = useState(
     () => searchParams?.get("new") === "1"

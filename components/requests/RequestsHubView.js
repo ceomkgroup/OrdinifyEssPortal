@@ -24,7 +24,6 @@ import {
 import { PageLoader } from "@/components/ui/Spinner";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { useAllRequests } from "@/hooks/useAllRequests";
-import { useDashboard } from "@/hooks/useDashboard";
 import { formatDateTime, rowSerial } from "@/lib/format";
 import { REQUEST_TYPES } from "@/lib/request-types";
 
@@ -93,7 +92,6 @@ function NewRequestMenu({ tiles }) {
 
 export function RequestsHubView() {
   const { canShowRequestTile, loading: modulesLoading } = useModules();
-  const { data: dashData } = useDashboard();
   const { rows, loading, error, refetch, sources } = useAllRequests();
 
   const [statusFilter, setStatusFilter] = useState("all");
@@ -101,7 +99,18 @@ export function RequestsHubView() {
   const [query, setQuery] = useState("");
   const [filterBusy, setFilterBusy] = useState(false);
 
-  const pendingCounts = dashData?.pendingRequests || {};
+  const pendingCounts = useMemo(() => {
+    const counts = {};
+    for (const row of rows) {
+      const s = String(row.statusBucket || row.status || "").toLowerCase();
+      if (s !== "pending" && s !== "submitted" && s !== "in_progress") continue;
+      const key = row.typeKey;
+      if (!key) continue;
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  }, [rows]);
+
   const visibleTiles = useMemo(
     () => REQUEST_TYPES.filter((t) => canShowRequestTile(t.key)),
     [canShowRequestTile]

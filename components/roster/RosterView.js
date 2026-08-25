@@ -12,7 +12,8 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { PageLoader } from "@/components/ui/Spinner";
-import { useDashboard } from "@/hooks/useDashboard";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useRoster } from "@/hooks/useRoster";
 import { formatTime, getDisplayName } from "@/lib/format";
 
@@ -198,14 +199,13 @@ export function RosterView() {
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
 
   const { rows, loading, error } = useRoster({ from, to });
-  const { data: dash } = useDashboard();
+  const { employee: authEmployee } = useAuth();
+  const { settings } = useCompanySettings();
 
-  const employee = dash?.employee;
-  const timeFormat = dash?.companySettings?.timeFormat || "12h";
+  const employee = authEmployee;
+  const timeFormat = settings.timeFormat || "12h";
   const timeZone =
-    dash?.companySettings?.timeZone ||
-    dash?.companySettings?.timezone ||
-    "Asia/Karachi";
+    settings.timeZone || settings.timezone || "Asia/Karachi";
 
   const displayName = getDisplayName(employee) || "Employee";
   const empCode =

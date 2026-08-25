@@ -1,34 +1,34 @@
 "use client";
 
-import { OnDutyView } from "@/components/requests/OnDutyView";
+import { AnnouncementsView } from "@/components/announcements/AnnouncementsView";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { ComingSoon } from "@/components/ui/ComingSoon";
 import { PageLoader } from "@/components/ui/Spinner";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 
-export default function OnDutyRequestPage() {
-  const { canShowRequestTile, loading } = useModules();
+export default function AnnouncementsPage() {
+  const { canAccessRoute, loading } = useModules();
   const { settings } = useCompanySettings();
 
   if (loading) {
     return (
-      <PageLoader label="Loading" hint="Checking on-duty access…" />
+      <PageLoader label="Loading" hint="Checking announcements access…" />
     );
   }
 
-  if (!canShowRequestTile("onDuty")) {
+  if (!canAccessRoute("/announcements")) {
     return (
       <ComingSoon
-        title="On Duty"
-        description="This request module is not enabled for your company."
+        title="Announcements"
+        description="Announcements are not enabled for your company."
       />
     );
   }
 
   return (
-    <OnDutyView
-      timeFormat={settings.timeFormat || "12h"}
+    <AnnouncementsView
       dateFormat={settings.dateFormat || "DD/MM/YYYY"}
+      timeFormat={settings.timeFormat || "12h"}
     />
   );
 }
