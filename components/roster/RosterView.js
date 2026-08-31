@@ -10,7 +10,7 @@ import {
   Umbrella,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
-import { FlashBanner } from "@/components/ui/FlashBanner";
+import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
@@ -326,17 +326,11 @@ export function RosterView() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-4">
-      {/* Header */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-[26px] font-bold tracking-tight text-[var(--text)]">
-            My Shift Roster
-          </h1>
-          <p className="mt-1 text-[13px] text-[var(--muted)]">
-            View your assigned shifts for the selected period.
-          </p>
-        </div>
+    <PortalPage
+      title="My Shift Roster"
+      subtitle="View your assigned shifts for the selected period."
+      error={error}
+      actions={
         <div className="flex flex-wrap items-center gap-4 text-[12px] font-medium text-[var(--text)]">
           <span className="inline-flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-[var(--success)]" />
@@ -355,7 +349,8 @@ export function RosterView() {
             No Shift
           </span>
         </div>
-      </div>
+      }
+    >
 
       {/* Employee + Period */}
       <div className="flex flex-col gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--card-shadow)] lg:flex-row lg:items-center lg:justify-between">
@@ -413,10 +408,6 @@ export function RosterView() {
         </div>
       </div>
 
-      {error ? (
-        <FlashBanner message={error} tone="danger" autoDismiss={false} />
-      ) : null}
-
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
         {/* Calendar */}
         <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--card-shadow)]">
@@ -446,7 +437,7 @@ export function RosterView() {
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
-            <h2 className="text-[15px] font-semibold text-[var(--text)]">
+            <h2 className="heading-section">
               {MONTH_NAMES[viewMonth - 1]} {viewYear}
             </h2>
           </div>
@@ -525,7 +516,7 @@ export function RosterView() {
         {/* Right */}
         <aside className="flex flex-col gap-3">
           <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--card-shadow)]">
-            <h3 className="text-[14px] font-semibold text-[var(--text)]">
+            <h3 className="heading-card">
               Shift Details
             </h3>
 
@@ -600,7 +591,7 @@ export function RosterView() {
           </div>
 
           <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--card-shadow)]">
-            <h3 className="text-[14px] font-semibold text-[var(--text)]">
+            <h3 className="heading-card">
               Roster Summary
             </h3>
             <div className="mt-1">
@@ -643,6 +634,6 @@ export function RosterView() {
           </div>
         </aside>
       </div>
-    </div>
+    </PortalPage>
   );
 }

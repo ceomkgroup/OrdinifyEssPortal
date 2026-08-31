@@ -37,10 +37,10 @@ export function ComingSoon({
           <Icon className="h-8 w-8" strokeWidth={1.5} />
         </div>
 
-        <h1 className="mt-5 font-[family-name:var(--font-heading)] text-[24px] font-semibold tracking-tight text-[var(--text)] md:text-[28px]">
+        <h1 className="heading-page mt-5">
           {title}
         </h1>
-        <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--muted)]">
+        <p className="heading-sub mx-auto mt-2 max-w-md leading-relaxed">
           {description ||
             "This screen is on the way. We are wiring it to match the rest of your employee portal."}
         </p>

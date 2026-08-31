@@ -17,7 +17,7 @@ import {
 import Link from "next/link";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { Button } from "@/components/ui/Button";
-import { FlashBanner } from "@/components/ui/FlashBanner";
+import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useMyShift } from "@/hooks/useMyShift";
@@ -97,17 +97,12 @@ export function MyShiftView() {
     : null;
 
   return (
-    <div className="flex w-full flex-col gap-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-[26px] font-bold tracking-tight text-[var(--text)]">
-            My Shift
-          </h1>
-          <p className="mt-1 text-[13px] text-[var(--muted)]">
-            View your current shift details and timings.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <PortalPage
+      title="My Shift"
+      subtitle="View your current shift details and timings."
+      error={error}
+      actions={
+        <>
           <Button
             type="button"
             variant="outline"
@@ -126,13 +121,9 @@ export function MyShiftView() {
               Request shift change
             </Link>
           ) : null}
-        </div>
-      </div>
-
-      {error ? (
-        <FlashBanner message={error} tone="danger" autoDismiss={false} />
-      ) : null}
-
+        </>
+      }
+    >
       {!hasShift ? (
         <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center shadow-[var(--card-shadow)]">
           <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--lavender-soft)] text-[var(--violet)]">
@@ -189,7 +180,7 @@ export function MyShiftView() {
 
           <div className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-[var(--violet)]" />
-            <h2 className="text-[15px] font-semibold text-[var(--text)]">
+            <h2 className="heading-section">
               Shift Information
             </h2>
           </div>
@@ -280,7 +271,7 @@ export function MyShiftView() {
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--card-shadow)]">
               <div className="mb-4 flex items-center gap-2">
                 <Clock3 className="h-4 w-4 text-[var(--violet)]" />
-                <h3 className="text-[15px] font-semibold text-[var(--text)]">
+                <h3 className="heading-card">
                   Shift Timings
                 </h3>
               </div>
@@ -350,6 +341,6 @@ export function MyShiftView() {
           )}
         </>
       )}
-    </div>
+    </PortalPage>
   );
 }

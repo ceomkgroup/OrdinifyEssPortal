@@ -17,8 +17,12 @@ import { formatDateTime } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { Avatar } from "@/components/ui/Avatar";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
 import { SlideOver } from "@/components/ui/SlideOver";
+import { ListToolbar } from "@/components/ui/ListToolbar";
+import { FilterSelect } from "@/components/ui/ListFilters";
 import {
   acknowledge,
   clearReaction,
@@ -32,6 +36,13 @@ import {
 import { useAnnouncementsBadge } from "@/components/announcements/AnnouncementsBadgeContext";
 
 const REACTION_OPTIONS = ["👍", "❤️", "🎉", "👏", "😮", "🙏"];
+
+const LIST_FILTER_TABS = [
+  { value: "all", label: "All" },
+  { value: "unread", label: "Unread" },
+  { value: "pinned", label: "Pinned" },
+  { value: "ack", label: "Need ack" },
+];
 
 const CATEGORY_LABELS = {
   holiday: "Holiday",
@@ -638,22 +649,16 @@ export function AnnouncementsView({
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-bold tracking-tight text-[var(--text)]">
-            Announcements
-          </h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Company updates, holidays, and notices for you.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <PortalPage
+      title="Announcements"
+      subtitle="Company updates, holidays, and notices for you."
+      actions={
+        <>
           <Button
             variant="outline"
             onClick={refetch}
             disabled={loading}
-            className="h-10"
+            className="h-10 rounded-xl"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -662,13 +667,14 @@ export function AnnouncementsView({
             variant="outline"
             onClick={handleMarkAllRead}
             disabled={markingAll || unreadCount === 0}
-            className="h-10"
+            className="h-10 rounded-xl"
           >
             <CheckCheck className="h-4 w-4" />
             {markingAll ? "Marking…" : "Mark all read"}
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {flash?.message ? (
         <FlashBanner
@@ -678,77 +684,84 @@ export function AnnouncementsView({
         />
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatPill label="Total" value={meta?.total ?? rows.length} />
-        <StatPill label="Unread" value={unreadCount} />
-        <StatPill label="Ack pending" value={pendingAckCount} />
-        <StatPill
-          label="Pinned"
-          value={rows.filter((r) => r.isPinned).length}
-        />
-      </div>
+      <CollapsibleSection title="Summary">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatPill label="Total" value={meta?.total ?? rows.length} />
+          <StatPill label="Unread" value={unreadCount} />
+          <StatPill label="Ack pending" value={pendingAckCount} />
+          <StatPill
+            label="Pinned"
+            value={rows.filter((r) => r.isPinned).length}
+          />
+        </div>
+      </CollapsibleSection>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {[
-          { key: "all", label: "All" },
-          { key: "unread", label: "Unread" },
-          { key: "pinned", label: "Pinned" },
-          { key: "ack", label: "Need ack" },
-        ].map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setListFilter(f.key)}
-            className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition ${
-              listFilter === f.key
-                ? "bg-[var(--violet)] text-white"
-                : "border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--lavender)] hover:text-[var(--violet)]"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="ml-auto h-9 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-[12px] font-semibold text-[var(--text)] outline-none focus:border-[var(--violet)]"
-          aria-label="Filter by category"
-        >
-          <option value="all">All categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {categoryLabel(c)}
-            </option>
-          ))}
-        </select>
-      </div>
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--card-shadow)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-2.5">
+          <h2 className="heading-section">
+            Announcement Logs
+          </h2>
+        </div>
+      <ListToolbar
+        tabs={LIST_FILTER_TABS}
+        tab={listFilter}
+        onTabChange={setListFilter}
+        recordCount={filtered.length}
+        filterActive={category !== "all"}
+        activeFilterCount={category !== "all" ? 1 : 0}
+        filterTitle="Filters"
+        filterSubtitle="Narrow announcements by category"
+        onResetFilters={() => setCategory("all")}
+        onApplyFilters={() => {}}
+        drawerFields={
+          <FilterSelect
+            label="Category"
+            value={category}
+            onChange={setCategory}
+            clearable
+            defaultValue="all"
+            options={[
+              { value: "all", label: "All categories" },
+              ...categories.map((c) => ({
+                value: c,
+                label: categoryLabel(c),
+              })),
+            ]}
+          />
+        }
+      />
 
       {loading ? (
-        <PageLoader label="Loading" hint="Fetching announcements…" />
+        <div className="p-5">
+          <PageLoader label="Loading" hint="Fetching announcements…" />
+        </div>
       ) : error ? (
-        <div className="rounded-2xl border border-[var(--danger)]/20 bg-[var(--danger-soft)] p-5 text-sm text-[var(--danger)]">
-          {error}
-          <div className="mt-3">
-            <Button variant="outline" onClick={refetch}>
-              Retry
-            </Button>
+        <div className="p-5">
+          <div className="rounded-2xl border border-[var(--danger)]/20 bg-[var(--danger-soft)] p-5 text-sm text-[var(--danger)]">
+            {error}
+            <div className="mt-3">
+              <Button variant="outline" onClick={refetch}>
+                Retry
+              </Button>
+            </div>
           </div>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-16 text-center">
-          <Inbox className="mb-3 h-10 w-10 text-[var(--muted)]" />
-          <p className="text-[15px] font-semibold text-[var(--text)]">
-            No announcements
-          </p>
-          <p className="mt-1 max-w-sm text-sm text-[var(--muted)]">
-            {listFilter === "all"
-              ? "There are no published announcements for you right now."
-              : "Nothing matches this filter."}
-          </p>
+        <div className="p-5">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] px-6 py-16 text-center">
+            <Inbox className="mb-3 h-10 w-10 text-[var(--muted)]" />
+            <p className="text-[15px] font-semibold text-[var(--text)]">
+              No announcements
+            </p>
+            <p className="mt-1 max-w-sm text-sm text-[var(--muted)]">
+              {listFilter === "all"
+                ? "There are no published announcements for you right now."
+                : "Nothing matches this filter."}
+            </p>
+          </div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 p-5">
           {filtered.map((item) => (
             <AnnouncementCard
               key={item.announcementId}
@@ -761,6 +774,7 @@ export function AnnouncementsView({
           ))}
         </div>
       )}
+      </section>
 
       <DetailPanel
         announcementId={selectedId}
@@ -769,6 +783,6 @@ export function AnnouncementsView({
         dateFormat={dateFormat}
         timeFormat={timeFormat}
       />
-    </div>
+    </PortalPage>
   );
 }

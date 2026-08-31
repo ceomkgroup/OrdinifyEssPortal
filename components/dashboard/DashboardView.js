@@ -104,10 +104,10 @@ export function DashboardView() {
   return (
     <>
       <div className="mb-4 flex flex-col gap-1 md:mb-5">
-        <h1 className="font-[family-name:var(--font-heading)] text-[26px] font-semibold leading-tight text-[var(--text)] md:text-[28px]">
+        <h1 className="heading-page">
           {greetingByHour()}, {firstName}
         </h1>
-        <p className="text-[13px] text-[var(--muted)]">
+        <p className="heading-sub">
           Here&apos;s what&apos;s happening with you today.
         </p>
       </div>

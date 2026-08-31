@@ -189,8 +189,8 @@ function SectionTitle({ icon: Icon, title, hint }) {
         <Icon className="h-4 w-4" />
       </span>
       <div>
-        <h3 className="text-[15px] font-semibold text-[var(--text)]">{title}</h3>
-        {hint ? <p className="text-[12px] text-[var(--muted)]">{hint}</p> : null}
+        <h3 className="heading-card">{title}</h3>
+        {hint ? <p className="heading-sub">{hint}</p> : null}
       </div>
     </div>
   );

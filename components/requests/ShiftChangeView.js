@@ -1,9 +1,9 @@
 "use client";
 
 import {
-  ChevronLeft,
-  ChevronRight,
+  CheckCircle2,
   Eye,
+  Hourglass,
   Inbox,
   MoreVertical,
   Plus,
@@ -15,26 +15,51 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { FlashBanner } from "@/components/ui/FlashBanner";
-import {
-  ListFiltersBar,
-  REQUEST_STATUS_OPTIONS,
-} from "@/components/ui/ListFilters";
+import { FilterDate } from "@/components/ui/ListFilters";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { PortalPage } from "@/components/ui/PortalPage";
 import { SlideOver } from "@/components/ui/SlideOver";
-import { PageLoader } from "@/components/ui/Spinner";
+import { TablePanel } from "@/components/ui/TablePanel";
 import { ShiftSelect } from "@/components/requests/ShiftSelect";
 import {
   cancelShiftChange,
   submitShiftChange,
   useAvailableShifts,
   useShiftChangeList,
+  useShiftChangeStats,
 } from "@/hooks/useShiftChange";
 import { useMyShift } from "@/hooks/useMyShift";
+import {
+  countActiveDateFilters,
+  dateInRange,
+} from "@/lib/request-date-filter";
 import { formatDate, formatDateTime, formatTime, rowSerial } from "@/lib/format";
 
 const fieldClass =
   "mt-1.5 h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]";
+
+function StatCard({ label, value, icon: Icon, tone }) {
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--card-shadow)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            {label}
+          </p>
+          <p className="mt-1.5 text-[22px] font-bold tabular-nums text-[var(--text)]">
+            {value}
+          </p>
+        </div>
+        <span
+          className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}
+        >
+          <Icon className="h-5 w-5" />
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function emptyForm() {
   return {
@@ -181,9 +206,12 @@ export function ShiftChangeView({
 }) {
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
-  const [limit] = useState(10);
+  const [limit, setLimit] = useState(10);
   const [listQuery, setListQuery] = useState("");
-  const [filterBusy, setFilterBusy] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [draftDateFrom, setDraftDateFrom] = useState("");
+  const [draftDateTo, setDraftDateTo] = useState("");
   const [showForm, setShowForm] = useState(Boolean(initialOpenForm));
   const [selected, setSelected] = useState(null);
 
@@ -206,10 +234,18 @@ export function ShiftChangeView({
     page,
     limit,
   });
+  const { stats, refetch: refetchStats } = useShiftChangeStats();
   const { shift: currentShift, loading: currentLoading } = useMyShift();
   const { shifts: catalogShifts, loading: shiftsLoading } = useAvailableShifts({
     enabled: showForm,
   });
+
+  useEffect(() => {
+    setDraftDateFrom(dateFrom);
+    setDraftDateTo(dateTo);
+  }, [dateFrom, dateTo]);
+
+  const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
 
   const shiftOptions = useMemo(() => {
     const map = new Map();
@@ -230,8 +266,18 @@ export function ShiftChangeView({
 
   const filteredRows = useMemo(() => {
     const q = listQuery.trim().toLowerCase();
-    if (!q) return rows || [];
     return (rows || []).filter((row) => {
+      if (
+        (dateFrom || dateTo) &&
+        !dateInRange(
+          row.effectiveDate || row.createdAt,
+          dateFrom,
+          dateTo
+        )
+      ) {
+        return false;
+      }
+      if (!q) return true;
       const hay = [
         row.reason,
         row.status,
@@ -245,11 +291,96 @@ export function ShiftChangeView({
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [rows, listQuery]);
+  }, [rows, listQuery, dateFrom, dateTo]);
 
   const total = Number(meta?.total) || 0;
   const currentPage = Number(meta?.page) || page;
   const totalPages = Math.max(1, Number(meta?.totalPages) || 1);
+
+  function resolveShiftName(shiftId, fallbackName) {
+    if (fallbackName) return fallbackName;
+    const found = shiftOptions.find((s) => s.shiftId === shiftId);
+    return found?.shiftName || (shiftId ? String(shiftId).slice(0, 8) + "…" : "—");
+  }
+
+  const columns = useMemo(
+    () => [
+      {
+        id: "serial",
+        header: "#",
+        headerClassName: "w-12",
+        cellClassName: "tabular-nums text-[var(--muted)]",
+        cell: (_row, { index }) => rowSerial(index, currentPage, limit),
+      },
+      {
+        id: "submitted",
+        header: "Submitted",
+        cellClassName: "whitespace-nowrap text-[var(--text)]",
+        cell: (row) =>
+          row.createdAt
+            ? formatDateTime(row.createdAt, dateFormat, timeFormat)
+            : "—",
+      },
+      {
+        id: "effective",
+        header: "Effective",
+        cellClassName: "whitespace-nowrap font-medium text-[var(--text)]",
+        cell: (row) => formatDate(row.effectiveDate, dateFormat),
+      },
+      {
+        id: "requestedShift",
+        header: "Requested shift",
+        cellClassName: "whitespace-nowrap text-[var(--text)]",
+        cell: (row) =>
+          resolveShiftName(row.requestedShiftId, row.requestedShiftName),
+      },
+      {
+        id: "reason",
+        header: "Reason",
+        cellClassName: "max-w-[220px] truncate text-[var(--muted)]",
+        cell: (row) => row.reason || "—",
+      },
+      {
+        id: "status",
+        header: "Status",
+        cellClassName: "whitespace-nowrap",
+        cell: (row) => {
+          const label = row.statusLabel || row.status || "—";
+          return (
+            <span
+              className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold capitalize ${statusTone(row.status)}`}
+            >
+              {label}
+            </span>
+          );
+        },
+      },
+      {
+        id: "action",
+        header: "Action",
+        cell: (row) => {
+          const isPending =
+            String(row.status || "").toLowerCase() === "pending";
+          return (
+            <RequestRowActions
+              requestId={row.requestId}
+              canCancel={isPending}
+              onView={() => setSelected(row)}
+              onCancel={() => handleCancel(row.requestId)}
+            />
+          );
+        },
+      },
+    ],
+    // handleCancel / resolveShiftName via closure; refresh with list state
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentPage, limit, dateFormat, timeFormat, shiftOptions]
+  );
+
+  function refreshAll() {
+    refetch();
+    refetchStats();
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -290,7 +421,7 @@ export function ShiftChangeView({
       setForm(emptyForm());
       setShowForm(false);
       setPage(1);
-      refetch();
+      refreshAll();
     } catch (err) {
       setFormError(err.message || "Failed to submit request.");
     } finally {
@@ -311,7 +442,7 @@ export function ShiftChangeView({
       setFlashTone("success");
       setFlash(res?.message || "Request cancelled");
       if (selected?.requestId === requestId) setSelected(null);
-      refetch();
+      refreshAll();
     } catch (err) {
       setFlashTone("danger");
       setFlash(err.message || "Failed to cancel request.");
@@ -320,14 +451,50 @@ export function ShiftChangeView({
     }
   }
 
-  function resolveShiftName(shiftId, fallbackName) {
-    if (fallbackName) return fallbackName;
-    const found = shiftOptions.find((s) => s.shiftId === shiftId);
-    return found?.shiftName || (shiftId ? String(shiftId).slice(0, 8) + "…" : "—");
-  }
-
   return (
-    <div className="space-y-4">
+    <PortalPage
+      fill
+      hideHeader={compact}
+      title="Shift Change"
+      subtitle={
+        <>
+          Request a different shift from a chosen effective date. Pending
+          requests can be cancelled anytime.
+          {!currentLoading && currentShift?.hasShift ? (
+            <span className="mt-2 block text-[12px] text-[var(--text)]">
+              Current:{" "}
+              <span className="font-semibold">
+                {shiftLabel(currentShift, timeFormat)}
+              </span>
+            </span>
+          ) : null}
+        </>
+      }
+      actions={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 rounded-xl"
+            onClick={refreshAll}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          <Button
+            type="button"
+            className="h-10 rounded-xl"
+            onClick={() => {
+              setShowForm(true);
+              setFormError("");
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            New request
+          </Button>
+        </>
+      }
+    >
       {compact ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -343,7 +510,7 @@ export function ShiftChangeView({
               type="button"
               variant="outline"
               className="h-10 rounded-xl"
-              onClick={refetch}
+              onClick={refreshAll}
             >
               <RefreshCw className="h-4 w-4" />
               Refresh
@@ -361,56 +528,36 @@ export function ShiftChangeView({
             </Button>
           </div>
         </div>
-      ) : (
-        <section className="overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--card-shadow)]">
-          <div className="flex flex-col gap-4 bg-gradient-to-br from-[var(--lavender-soft)] via-[var(--surface)] to-[var(--surface)] p-4 md:flex-row md:items-center md:justify-between md:p-5">
-            <div className="flex items-start gap-3">
-              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--violet)] text-white shadow-sm">
-                <RefreshCw className="h-6 w-6" />
-              </span>
-              <div>
-                <h1 className="font-[family-name:var(--font-heading)] text-[24px] font-semibold text-[var(--text)]">
-                  Shift Change
-                </h1>
-                <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-[var(--muted)]">
-                  Request a different shift from a chosen effective date. Pending
-                  requests can be cancelled anytime.
-                </p>
-                {!currentLoading && currentShift?.hasShift ? (
-                  <p className="mt-2 text-[12px] text-[var(--text)]">
-                    Current:{" "}
-                    <span className="font-semibold">
-                      {shiftLabel(currentShift, timeFormat)}
-                    </span>
-                  </p>
-                ) : null}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 md:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 rounded-xl"
-                onClick={refetch}
-              >
-                <RefreshCw className="h-4 w-4" />
-                Refresh
-              </Button>
-              <Button
-                type="button"
-                className="h-10 rounded-xl"
-                onClick={() => {
-                  setShowForm(true);
-                  setFormError("");
-                }}
-              >
-                <Plus className="h-4 w-4" />
-                New request
-              </Button>
-            </div>
-          </div>
-        </section>
-      )}
+      ) : null}
+
+      <CollapsibleSection title="Summary">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard
+          label="Total Requests"
+          value={stats.total}
+          icon={Inbox}
+          tone="bg-[var(--info-soft)] text-[var(--info)]"
+        />
+        <StatCard
+          label="Pending"
+          value={stats.pending}
+          icon={Hourglass}
+          tone="bg-[var(--lavender-soft)] text-[var(--violet)]"
+        />
+        <StatCard
+          label="Approved"
+          value={stats.approved}
+          icon={CheckCircle2}
+          tone="bg-[var(--success-soft)] text-[var(--success)]"
+        />
+        <StatCard
+          label="Cancelled"
+          value={stats.cancelled}
+          icon={XCircle}
+          tone="bg-[var(--danger-soft)] text-[var(--danger)]"
+        />
+      </div>
+      </CollapsibleSection>
 
       {flash ? (
         <FlashBanner
@@ -421,182 +568,97 @@ export function ShiftChangeView({
         />
       ) : null}
 
-      <Card bodyClassName="!min-h-0">
-        <div className="mb-4">
-          <div className="mb-3">
-            <h3 className="text-[15px] font-semibold text-[var(--text)]">
-              My requests
-            </h3>
-            <p className="mt-0.5 text-[12px] text-[var(--muted)]">
-              Track pending, approved and cancelled shift-change requests
-            </p>
-          </div>
-          <ListFiltersBar
-            search={listQuery}
-            onSearchChange={setListQuery}
-            searchPlaceholder="Search shift, reason, status…"
-            status={status}
-            onStatusChange={(next) => {
-              setStatus(next);
-              setPage(1);
-            }}
-            statusOptions={REQUEST_STATUS_OPTIONS}
-            loading={loading}
-            onBusyChange={setFilterBusy}
-          />
-        </div>
-
-        {error ? (
-          <FlashBanner
-            message={error}
-            tone="danger"
-            className="mb-3"
-            duration={5000}
-            autoDismiss={false}
-          />
-        ) : null}
-
-        {loading || filterBusy ? (
-          <PageLoader
-            compact
-            label={loading ? "Loading requests" : "Updating results"}
-            hint={
-              loading
-                ? "Fetching shift-change requests…"
-                : "Applying your search and filters…"
-            }
-          />
-        ) : filteredRows.length === 0 ? (
-          <div className="flex min-h-[200px] flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] px-4 text-center">
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--lavender-soft)] text-[var(--violet)]">
-              <Inbox className="h-6 w-6" />
-            </span>
-            <p className="mt-3 text-[14px] font-semibold text-[var(--text)]">
-              No {status === "all" ? "" : `${status} `}requests
-            </p>
-            <p className="mt-1 max-w-sm text-[12px] text-[var(--muted)]">
-              Submit a request when you need to move to a different shift.
-            </p>
-            <Button
-              type="button"
-              className="mt-4 h-10 rounded-xl"
-              onClick={() => setShowForm(true)}
-            >
-              <Plus className="h-4 w-4" />
-              New request
-            </Button>
-          </div>
-        ) : (
+      <TablePanel
+        title="Shift Change Logs"
+        tabs={[
+          { value: "all", label: "All" },
+          { value: "pending", label: "Pending" },
+          { value: "approved", label: "Approved" },
+          { value: "cancelled", label: "Cancelled" },
+        ]}
+        tab={status}
+        onTabChange={(next) => {
+          setStatus(next);
+          setPage(1);
+        }}
+        recordCount={
+          listQuery.trim() || dateFilterCount > 0
+            ? filteredRows.length
+            : total
+        }
+        search={listQuery}
+        onSearchChange={setListQuery}
+        searchPlaceholder="Search shift, reason, status…"
+        filterActive={dateFilterCount > 0}
+        activeFilterCount={dateFilterCount}
+        drawerFields={
           <>
-            <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-              <table className="min-w-full text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-[var(--border)] bg-[var(--panel-soft)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
-                    <th className="w-12 whitespace-nowrap px-3 py-2.5 font-semibold">
-                      #
-                    </th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                      Submitted
-                    </th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                      Effective
-                    </th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                      Requested shift
-                    </th>
-                    <th className="px-3 py-2.5 font-semibold">Reason</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                      Status
-                    </th>
-                    <th className="px-3 py-2.5 font-semibold">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.map((row, index) => {
-                    const label = row.statusLabel || row.status || "—";
-                    const isPending =
-                      String(row.status || "").toLowerCase() === "pending";
-                    return (
-                      <tr
-                        key={row.requestId}
-                        className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-soft)]/50"
-                      >
-                        <td className="px-3 py-3 tabular-nums text-[var(--muted)]">
-                          {rowSerial(index, page, limit)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
-                          {row.createdAt
-                            ? formatDateTime(
-                                row.createdAt,
-                                dateFormat,
-                                timeFormat
-                              )
-                            : "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3 font-medium text-[var(--text)]">
-                          {formatDate(row.effectiveDate, dateFormat)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
-                          {resolveShiftName(
-                            row.requestedShiftId,
-                            row.requestedShiftName
-                          )}
-                        </td>
-                        <td className="max-w-[220px] truncate px-3 py-3 text-[var(--muted)]">
-                          {row.reason || "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3">
-                          <span
-                            className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold capitalize ${statusTone(row.status)}`}
-                          >
-                            {label}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3">
-                          <RequestRowActions
-                            requestId={row.requestId}
-                            canCancel={isPending}
-                            onView={() => setSelected(row)}
-                            onCancel={() => handleCancel(row.requestId)}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[12px] text-[var(--muted)]">
-                Showing page {currentPage} of {totalPages} · {total} total
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-9 rounded-lg px-2"
-                  disabled={currentPage <= 1 || loading}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-9 rounded-lg px-2"
-                  disabled={currentPage >= totalPages || loading}
-                  onClick={() => setPage((p) => p + 1)}
-                  aria-label="Next page"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <FilterDate
+              label="From date"
+              value={draftDateFrom}
+              onChange={setDraftDateFrom}
+              max={draftDateTo || undefined}
+              clearable
+            />
+            <FilterDate
+              label="To date"
+              value={draftDateTo}
+              onChange={setDraftDateTo}
+              min={draftDateFrom || undefined}
+              clearable
+            />
           </>
-        )}
-      </Card>
+        }
+        onApplyFilters={() => {
+          setDateFrom(draftDateFrom);
+          setDateTo(draftDateTo);
+          setPage(1);
+        }}
+        onResetFilters={() => {
+          setDraftDateFrom("");
+          setDraftDateTo("");
+          setDateFrom("");
+          setDateTo("");
+          setPage(1);
+        }}
+        onRefresh={refreshAll}
+        columns={columns}
+        rows={filteredRows}
+        getRowKey={(row) => row.requestId}
+        minWidth="900px"
+        loading={loading}
+        loadingLabel="Loading requests"
+        loadingHint="Fetching shift-change requests…"
+        error={error}
+        emptyIcon={Inbox}
+        emptyTitle={`No ${status === "all" ? "" : `${status} `}requests`}
+        emptyHint="Submit a request when you need to move to a different shift."
+        emptyAction={
+          <Button
+            type="button"
+            className="h-10 rounded-xl"
+            onClick={() => setShowForm(true)}
+          >
+            <Plus className="h-4 w-4" />
+            New request
+          </Button>
+        }
+        page={currentPage}
+        pageSize={limit}
+        total={
+          listQuery.trim() || dateFilterCount > 0
+            ? filteredRows.length
+            : total
+        }
+        totalPages={
+          listQuery.trim() || dateFilterCount > 0 ? 1 : totalPages
+        }
+        onPageChange={setPage}
+        onPageSizeChange={(n) => {
+          setLimit(n);
+          setPage(1);
+        }}
+      />
 
       <SlideOver
         open={showForm}
@@ -810,6 +872,6 @@ export function ShiftChangeView({
           </div>
         ) : null}
       </SlideOver>
-    </div>
+    </PortalPage>
   );
 }

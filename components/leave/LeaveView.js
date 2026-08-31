@@ -6,8 +6,6 @@ import {
   Banknote,
   CalendarDays,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Clock3,
   Eye,
   FilePenLine,
@@ -18,18 +16,18 @@ import {
   Plus,
   RefreshCw,
   Send,
-  Sparkles,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FlashBanner } from "@/components/ui/FlashBanner";
-import {
-  ListFiltersBar,
-  REQUEST_STATUS_OPTIONS,
-} from "@/components/ui/ListFilters";
+import { FilterSelect } from "@/components/ui/ListFilters";
+import { MetaBadge } from "@/components/ui/MetaBadge";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
 import { SlideOver } from "@/components/ui/SlideOver";
+import { TablePanel } from "@/components/ui/TablePanel";
 import { useLeavePage } from "@/hooks/useLeave";
 import { useLeaveTypes } from "@/hooks/useLeaveTypes";
 import { formatDate, formatDateTime, rowSerial } from "@/lib/format";
@@ -131,59 +129,6 @@ function StatusPill({ status, label }) {
     >
       {label || status || "—"}
     </span>
-  );
-}
-
-function Pagination({ page, totalPages, total, limit, loading, onPage, onLimit }) {
-  const fromRow = total === 0 ? 0 : (page - 1) * limit + 1;
-  const toRow = Math.min(page * limit, total);
-
-  return (
-    <div className="mt-4 flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-[12px] text-[var(--muted)]">
-        Showing{" "}
-        <span className="font-semibold text-[var(--text)]">{fromRow}</span>–
-        <span className="font-semibold text-[var(--text)]">{toRow}</span> of{" "}
-        <span className="font-semibold text-[var(--text)]">{total}</span>
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
-          Rows
-          <select
-            value={limit}
-            onChange={(e) => onLimit(Number(e.target.value))}
-            className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-[12px] text-[var(--text)]"
-          >
-            {[10, 20, 30, 50].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-9 rounded-lg"
-          disabled={page <= 1 || loading}
-          onClick={() => onPage(Math.max(1, page - 1))}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span className="min-w-[56px] text-center text-[12px] font-semibold text-[var(--text)]">
-          {page} / {Math.max(1, totalPages)}
-        </span>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-9 rounded-lg"
-          disabled={page >= totalPages || loading || total === 0}
-          onClick={() => onPage(Math.min(totalPages, page + 1))}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
   );
 }
 
@@ -528,15 +473,47 @@ export function LeaveView({ initialTab = "requests" }) {
   const [encashDetail, setEncashDetail] = useState(null);
   const [listQuery, setListQuery] = useState("");
   const [leaveTypeFilter, setLeaveTypeFilter] = useState("all");
+  const [draftLeaveType, setDraftLeaveType] = useState("all");
   const [encashQuery, setEncashQuery] = useState("");
   const [encashTypeFilter, setEncashTypeFilter] = useState("all");
-  const [leaveFilterBusy, setLeaveFilterBusy] = useState(false);
-  const [encashFilterBusy, setEncashFilterBusy] = useState(false);
+  const [draftEncashType, setDraftEncashType] = useState("all");
+  const [draftFiscalYear, setDraftFiscalYear] = useState(String(fiscalYear));
 
+  useEffect(() => {
+    setDraftLeaveType(leaveTypeFilter);
+  }, [leaveTypeFilter]);
+
+  useEffect(() => {
+    setDraftEncashType(encashTypeFilter);
+  }, [encashTypeFilter]);
+
+  useEffect(() => {
+    setDraftFiscalYear(String(fiscalYear));
+  }, [fiscalYear]);
+
+  const statusTabs = [
+    { value: "all", label: "All" },
+    { value: "pending", label: "Pending" },
+    { value: "approved", label: "Approved" },
+    { value: "cancelled", label: "Cancelled" },
+  ];
+
+  const currentYear = new Date().getFullYear();
   const yearOptions = useMemo(() => {
-    const y = new Date().getFullYear();
+    const y = currentYear;
     return [y - 1, y, y + 1];
-  }, []);
+  }, [currentYear]);
+
+  const fiscalYearFilterOptions = useMemo(
+    () => yearOptions.map((y) => ({ value: String(y), label: `FY ${y}` })),
+    [yearOptions]
+  );
+
+  const fyFilterActive = Number(fiscalYear) !== currentYear;
+  const leaveListFilterCount =
+    (leaveTypeFilter !== "all" ? 1 : 0) + (fyFilterActive ? 1 : 0);
+  const encashListFilterCount =
+    (encashTypeFilter !== "all" ? 1 : 0) + (fyFilterActive ? 1 : 0);
 
   const totals = useMemo(() => {
     return balances.reduce(
@@ -669,6 +646,206 @@ export function LeaveView({ initialTab = "requests" }) {
       return hay.includes(q);
     });
   }, [encashRows, encashQuery, encashTypeFilter]);
+
+  const requestColumns = useMemo(
+    () => [
+      {
+        id: "serial",
+        header: "#",
+        headerClassName: "w-12",
+        cellClassName: "tabular-nums text-[var(--muted)]",
+        cell: (_row, { index }) => rowSerial(index, page, limit),
+      },
+      {
+        id: "leaveType",
+        header: "Leave type",
+        cellClassName: "font-medium text-[var(--text)]",
+        cell: (row) => {
+          const half =
+            row.isFirstHalf || row.isSecondHalf
+              ? row.isFirstHalf
+                ? " · 1st half"
+                : " · 2nd half"
+              : "";
+          return (
+            <>
+              {row.leaveTypeName ||
+                leaveTypeName(row.leaveTypeId, leaveTypes, balances)}
+              {half ? (
+                <span className="text-[11px] text-[var(--muted)]">{half}</span>
+              ) : null}
+            </>
+          );
+        },
+      },
+      {
+        id: "from",
+        header: "From",
+        cellClassName: "whitespace-nowrap text-[var(--text)]",
+        cell: (row) => formatDate(row.fromDate),
+      },
+      {
+        id: "to",
+        header: "To",
+        cellClassName: "whitespace-nowrap text-[var(--text)]",
+        cell: (row) => formatDate(row.toDate),
+      },
+      {
+        id: "days",
+        header: "Days",
+        cellClassName: "tabular-nums text-[var(--text)]",
+        cell: (row) => row.totalDays ?? "—",
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (row) => (
+          <>
+            <StatusPill
+              status={row.status}
+              label={row.statusLabel || row.status}
+            />
+            {row.rejectionReason ? (
+              <p className="mt-1 max-w-[160px] truncate text-[10px] text-[var(--danger)]">
+                {row.rejectionReason}
+              </p>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        id: "submitted",
+        header: "Submitted",
+        cellClassName: "whitespace-nowrap text-[var(--muted)]",
+        cell: (row) =>
+          row.createdAt ? formatDateTime(row.createdAt) : "—",
+      },
+      {
+        id: "reason",
+        header: "Reason",
+        cellClassName: "max-w-[180px] truncate text-[var(--muted)]",
+        cell: (row) => (
+          <span title={row.reason || ""}>{row.reason || "—"}</span>
+        ),
+      },
+      {
+        id: "action",
+        header: "Action",
+        cell: (row) => {
+          const requestId =
+            row.requestId || row.id || row.leaveRequestId;
+          const isPending =
+            String(row.status || "").toLowerCase() === "pending";
+          return (
+            <LeaveRequestRowActions
+              requestId={requestId}
+              canEdit={isPending}
+              canCancel={isPending}
+              onView={() => setDetail({ ...row, requestId })}
+              onEdit={() => openEdit({ ...row, requestId })}
+              onCancel={() => onCancelLeave(requestId)}
+            />
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [page, limit, leaveTypes, balances]
+  );
+
+  const encashColumns = useMemo(
+    () => [
+      {
+        id: "serial",
+        header: "#",
+        headerClassName: "w-12",
+        cellClassName: "tabular-nums text-[var(--muted)]",
+        cell: (_row, { index }) =>
+          rowSerial(index, encashPage, encashLimit),
+      },
+      {
+        id: "leaveType",
+        header: "Leave type",
+        cellClassName: "font-medium text-[var(--text)]",
+        cell: (row) =>
+          row.leaveTypeName ||
+          leaveTypeName(row.leaveTypeId, leaveTypes, balances),
+      },
+      {
+        id: "days",
+        header: "Days",
+        cellClassName: "tabular-nums text-[var(--text)]",
+        cell: (row) => row.daysToEncash ?? row.days ?? "—",
+      },
+      {
+        id: "amount",
+        header: "Amount",
+        cellClassName: "tabular-nums text-[var(--text)]",
+        cell: (row) => {
+          const amount =
+            row.amount ??
+            row.encashmentAmount ??
+            row.totalAmount ??
+            row.payableAmount;
+          return amount != null && amount !== "" ? amount : "—";
+        },
+      },
+      {
+        id: "fy",
+        header: "FY",
+        cell: (row) => row.fiscalYear ?? "—",
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (row) => (
+          <StatusPill
+            status={row.status}
+            label={row.statusLabel || row.status}
+          />
+        ),
+      },
+      {
+        id: "submitted",
+        header: "Submitted",
+        cellClassName: "whitespace-nowrap text-[var(--muted)]",
+        cell: (row) =>
+          row.createdAt
+            ? formatDateTime(row.createdAt)
+            : row.requestedAt
+              ? formatDateTime(row.requestedAt)
+              : "—",
+      },
+      {
+        id: "remarks",
+        header: "Remarks",
+        cellClassName: "max-w-[160px] truncate text-[var(--muted)]",
+        cell: (row) => (
+          <span title={row.remarks || ""}>{row.remarks || "—"}</span>
+        ),
+      },
+      {
+        id: "action",
+        header: "Action",
+        cell: (row) => {
+          const id = row.encashmentId || row.requestId || row.id;
+          const isPending =
+            String(row.status || "").toLowerCase() === "pending";
+          return (
+            <LeaveRequestRowActions
+              requestId={String(id)}
+              canEdit={false}
+              canCancel={isPending}
+              onView={() => setEncashDetail(row)}
+              onCancel={() => onCancelEncash(id)}
+            />
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [encashPage, encashLimit, leaveTypes, balances]
+  );
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -888,116 +1065,90 @@ export function LeaveView({ initialTab = "requests" }) {
   ];
 
   return (
-    <div className="flex w-full flex-col gap-5">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--card-shadow)] md:p-6">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[var(--lavender-soft)] opacity-70 blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-[var(--violet-soft)] opacity-50 blur-2xl" />
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--lavender-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--violet)]">
-              <Sparkles className="h-3.5 w-3.5" />
-              Leave management
-            </div>
-            <h1 className="mt-2 font-[family-name:var(--font-heading)] text-[26px] font-semibold tracking-tight text-[var(--text)] md:text-[30px]">
-              Your leave
-            </h1>
-            <p className="mt-1 max-w-xl text-[13px] text-[var(--muted)]">
-              Track balances, apply for time off, and manage pending requests
-              for fiscal year {fiscalYear}.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex h-10 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 text-[12px] text-[var(--muted)]">
-              FY
-              <select
-                value={fiscalYear}
-                onChange={(e) => setFiscalYear(Number(e.target.value))}
-                className="bg-transparent text-[13px] font-semibold text-[var(--text)] outline-none"
-              >
-                {yearOptions.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 rounded-xl"
-              onClick={refetch}
-            >
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </Button>
-            <Button
-              type="button"
-              className="h-10 rounded-xl"
-              onClick={() => openApply()}
-            >
-              <Plus className="h-4 w-4" />
-              Apply leave
-            </Button>
-          </div>
-        </div>
+    <PortalPage
+      fill
+      title="Leave"
+      subtitle="Track balances, apply for time off, and manage pending requests."
+      actions={
+        <>
+          <MetaBadge>FY {fiscalYear}</MetaBadge>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 rounded-xl"
+            onClick={refetch}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          <Button
+            type="button"
+            className="h-10 rounded-xl"
+            onClick={() => openApply()}
+          >
+            <Plus className="h-4 w-4" />
+            Apply leave
+          </Button>
+        </>
+      }
+    >
 
-        {/* KPI strip */}
-        <div className="relative mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          {[
-            {
-              label: "Remaining",
-              value: num(totals.remaining),
-              icon: CheckCircle2,
-              tone: "text-[var(--success)]",
-              soft: "bg-[var(--success-soft)]",
-            },
-            {
-              label: "Used",
-              value: num(totals.used),
-              icon: CalendarDays,
-              tone: "text-[var(--violet)]",
-              soft: "bg-[var(--lavender-soft)]",
-            },
-            {
-              label: "Pending approval",
-              value: num(totals.pending),
-              icon: Hourglass,
-              tone: "text-[var(--warning)]",
-              soft: "bg-[var(--warning-soft)]",
-            },
-            {
-              label: "Leave types",
-              value: String(balances.length),
-              icon: Palmtree,
-              tone: "text-[var(--info)]",
-              soft: "bg-[var(--info-soft)]",
-            },
-          ].map((kpi) => {
-            const Icon = kpi.icon;
-            return (
-              <div
-                key={kpi.label}
-                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/80 px-3.5 py-3 backdrop-blur"
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${kpi.soft} ${kpi.tone}`}
-                  >
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <p className="text-[11px] font-medium text-[var(--muted)]">
-                    {kpi.label}
-                  </p>
-                </div>
-                <p className="mt-2 text-[22px] font-bold tabular-nums leading-none text-[var(--text)]">
-                  {kpi.value}
+      <CollapsibleSection title="Summary">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {[
+          {
+            label: "Remaining",
+            value: num(totals.remaining),
+            icon: CheckCircle2,
+            tone: "text-[var(--success)]",
+            soft: "bg-[var(--success-soft)]",
+          },
+          {
+            label: "Used",
+            value: num(totals.used),
+            icon: CalendarDays,
+            tone: "text-[var(--violet)]",
+            soft: "bg-[var(--lavender-soft)]",
+          },
+          {
+            label: "Pending approval",
+            value: num(totals.pending),
+            icon: Hourglass,
+            tone: "text-[var(--warning)]",
+            soft: "bg-[var(--warning-soft)]",
+          },
+          {
+            label: "Leave types",
+            value: String(balances.length),
+            icon: Palmtree,
+            tone: "text-[var(--info)]",
+            soft: "bg-[var(--info-soft)]",
+          },
+        ].map((kpi) => {
+          const Icon = kpi.icon;
+          return (
+            <div
+              key={kpi.label}
+              className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${kpi.soft} ${kpi.tone}`}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
+                <p className="text-[11px] font-medium text-[var(--muted)]">
+                  {kpi.label}
                 </p>
               </div>
-            );
-          })}
+              <p className="mt-2 text-[22px] font-bold tabular-nums leading-none text-[var(--text)]">
+                {kpi.value}
+              </p>
+            </div>
+          );
+        })}
         </div>
-      </div>
+      </CollapsibleSection>
 
       {error ? (
         <FlashBanner
@@ -1017,17 +1168,7 @@ export function LeaveView({ initialTab = "requests" }) {
       ) : null}
 
       {/* Balances */}
-      <section>
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-[family-name:var(--font-heading)] text-[15px] font-semibold text-[var(--text)]">
-              Leave balances
-            </h2>
-            <p className="text-[12px] text-[var(--muted)]">
-              Quota by leave type · click Apply to request
-            </p>
-          </div>
-        </div>
+      <CollapsibleSection title="Leave balances">
         {balanceLoading ? (
           <PageLoader
             compact
@@ -1081,11 +1222,15 @@ export function LeaveView({ initialTab = "requests" }) {
             ) : null}
           </div>
         )}
-      </section>
+      </CollapsibleSection>
 
       {/* Tabs + lists */}
-      <Card className="!p-0 overflow-hidden" bodyClassName="!min-h-0">
-        <div className="flex flex-col gap-3 border-b border-[var(--border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-5">
+      <Card
+        data-fill-panel=""
+        className="!p-0 min-h-0 overflow-hidden"
+        bodyClassName="!min-h-0 flex flex-col overflow-hidden"
+      >
+        <div className="flex shrink-0 flex-col gap-3 border-b border-[var(--border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-5">
           <div className="inline-flex rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] p-1">
             {tabs.map((tab) => {
               const active = mainTab === tab.id;
@@ -1138,369 +1283,183 @@ export function LeaveView({ initialTab = "requests" }) {
           ) : null}
         </div>
 
-        <div className="p-4 md:p-5">
-          {mainTab === "requests" ? (
-            <>
-              <div className="mb-4">
-                <ListFiltersBar
-                  search={listQuery}
-                  onSearchChange={setListQuery}
-                  searchPlaceholder="Search leave type, reason, status…"
-                  status={status}
-                  onStatusChange={setStatusFilter}
-                  statusOptions={REQUEST_STATUS_OPTIONS}
-                  type={leaveTypeFilter}
-                  onTypeChange={setLeaveTypeFilter}
-                  typeOptions={leaveTypeOptions}
-                  typeLabel="Leave type"
-                  loading={requestsLoading}
-                  onBusyChange={setLeaveFilterBusy}
+        {mainTab === "requests" ? (
+          <TablePanel
+            className="min-h-0 border-0 shadow-none rounded-none"
+            title="Leave Logs"
+            tabs={statusTabs}
+            tab={status}
+            onTabChange={setStatusFilter}
+            recordCount={filteredRequests.length}
+            search={listQuery}
+            onSearchChange={setListQuery}
+            searchPlaceholder="Search leave type, reason, status…"
+            filterActive={leaveListFilterCount > 0}
+            activeFilterCount={leaveListFilterCount}
+            drawerFields={
+              <>
+                <FilterSelect
+                  label="Fiscal year"
+                  value={draftFiscalYear}
+                  onChange={setDraftFiscalYear}
+                  options={fiscalYearFilterOptions}
                 />
-              </div>
-
-              {requestsLoading || leaveFilterBusy ? (
-                <PageLoader
-                  compact
-                  label={
-                    requestsLoading ? "Loading requests" : "Updating results"
-                  }
-                  hint={
-                    requestsLoading
-                      ? "Fetching leave requests…"
-                      : "Applying your search and filters…"
-                  }
+                <FilterSelect
+                  label="Leave type"
+                  value={draftLeaveType}
+                  onChange={setDraftLeaveType}
+                  options={leaveTypeOptions}
+                  clearable
+                  defaultValue="all"
                 />
-              ) : filteredRequests.length === 0 ? (
-                <EmptyState
-                  icon={Inbox}
-                  title="No leave requests"
-                  hint={
-                    status === "all" && !listQuery && leaveTypeFilter === "all"
-                      ? "When you apply for leave, your requests will show up here."
-                      : "No requests match these filters."
-                  }
-                  action={
-                    <Button
-                      type="button"
-                      className="h-10 rounded-xl"
-                      onClick={() => openApply()}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Apply leave
-                    </Button>
-                  }
+              </>
+            }
+            onApplyFilters={() => {
+              setFiscalYear(Number(draftFiscalYear));
+              setLeaveTypeFilter(draftLeaveType);
+              setPage(1);
+            }}
+            onResetFilters={() => {
+              const y = String(currentYear);
+              setDraftFiscalYear(y);
+              setFiscalYear(currentYear);
+              setDraftLeaveType("all");
+              setLeaveTypeFilter("all");
+              setPage(1);
+            }}
+            columns={requestColumns}
+            rows={filteredRequests}
+            getRowKey={(row) =>
+              row.requestId || row.id || row.leaveRequestId
+            }
+            minWidth="960px"
+            loading={requestsLoading}
+            loadingLabel="Loading requests"
+            loadingHint="Fetching leave requests…"
+            emptyIcon={Inbox}
+            emptyTitle="No leave requests"
+            emptyHint={
+              status === "all" && !listQuery && leaveTypeFilter === "all"
+                ? "When you apply for leave, your requests will show up here."
+                : "No requests match these filters."
+            }
+            emptyAction={
+              <Button
+                type="button"
+                className="h-10 rounded-xl"
+                onClick={() => openApply()}
+              >
+                <Plus className="h-4 w-4" />
+                Apply leave
+              </Button>
+            }
+            page={page}
+            pageSize={limit}
+            total={requestTotal}
+            totalPages={requestPages}
+            onPageChange={setPage}
+            onPageSizeChange={(n) => {
+              setLimit(n);
+              setPage(1);
+            }}
+          />
+        ) : encashDisabled ? (
+          <div className="p-4 md:p-5">
+            <EmptyState
+              icon={Banknote}
+              title="Encashment not available"
+              hint={
+                encashMessage ||
+                "Leave encashment is not enabled for this company."
+              }
+            />
+          </div>
+        ) : (
+          <TablePanel
+            className="min-h-0 border-0 shadow-none rounded-none"
+            title="Encashment Logs"
+            tabs={statusTabs}
+            tab={encashStatus}
+            onTabChange={setEncashStatusFilter}
+            recordCount={filteredEncashRows.length}
+            search={encashQuery}
+            onSearchChange={setEncashQuery}
+            searchPlaceholder="Search leave type, remarks, status…"
+            filterActive={encashListFilterCount > 0}
+            activeFilterCount={encashListFilterCount}
+            drawerFields={
+              <>
+                <FilterSelect
+                  label="Fiscal year"
+                  value={draftFiscalYear}
+                  onChange={setDraftFiscalYear}
+                  options={fiscalYearFilterOptions}
                 />
-              ) : (
-                <div className="overflow-x-auto rounded-2xl border border-[var(--border)]">
-                  <table className="min-w-full text-left text-[13px]">
-                    <thead>
-                      <tr className="border-b border-[var(--border)] bg-[var(--panel-soft)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
-                        <th className="w-12 px-3 py-2.5 font-semibold">#</th>
-                        <th className="px-3 py-2.5 font-semibold">Leave type</th>
-                        <th className="px-3 py-2.5 font-semibold">From</th>
-                        <th className="px-3 py-2.5 font-semibold">To</th>
-                        <th className="px-3 py-2.5 font-semibold">Days</th>
-                        <th className="px-3 py-2.5 font-semibold">Status</th>
-                        <th className="px-3 py-2.5 font-semibold">Submitted</th>
-                        <th className="px-3 py-2.5 font-semibold">Reason</th>
-                        <th className="px-3 py-2.5 font-semibold">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRequests.map((row, index) => {
-                        const requestId =
-                          row.requestId || row.id || row.leaveRequestId;
-                        const isPending =
-                          String(row.status || "").toLowerCase() === "pending";
-                        const half =
-                          row.isFirstHalf || row.isSecondHalf
-                            ? row.isFirstHalf
-                              ? " · 1st half"
-                              : " · 2nd half"
-                            : "";
-                        return (
-                          <tr
-                            key={requestId}
-                            className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-soft)]/70"
-                          >
-                            <td className="px-3 py-3 tabular-nums text-[var(--muted)]">
-                              {rowSerial(index, page, limit)}
-                            </td>
-                            <td className="px-3 py-3 font-medium text-[var(--text)]">
-                              {row.leaveTypeName ||
-                                leaveTypeName(
-                                  row.leaveTypeId,
-                                  leaveTypes,
-                                  balances
-                                )}
-                              {half ? (
-                                <span className="text-[11px] text-[var(--muted)]">
-                                  {half}
-                                </span>
-                              ) : null}
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
-                              {formatDate(row.fromDate)}
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
-                              {formatDate(row.toDate)}
-                            </td>
-                            <td className="px-3 py-3 tabular-nums text-[var(--text)]">
-                              {row.totalDays ?? "—"}
-                            </td>
-                            <td className="px-3 py-3">
-                              <StatusPill
-                                status={row.status}
-                                label={row.statusLabel || row.status}
-                              />
-                              {row.rejectionReason ? (
-                                <p className="mt-1 max-w-[160px] truncate text-[10px] text-[var(--danger)]">
-                                  {row.rejectionReason}
-                                </p>
-                              ) : null}
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-3 text-[var(--muted)]">
-                              {row.createdAt
-                                ? formatDateTime(row.createdAt)
-                                : "—"}
-                            </td>
-                            <td
-                              className="max-w-[180px] truncate px-3 py-3 text-[var(--muted)]"
-                              title={row.reason || ""}
-                            >
-                              {row.reason || "—"}
-                            </td>
-                            <td className="px-3 py-3">
-                              <LeaveRequestRowActions
-                                requestId={requestId}
-                                canEdit={isPending}
-                                canCancel={isPending}
-                                onView={() => setDetail({ ...row, requestId })}
-                                onEdit={() =>
-                                  openEdit({ ...row, requestId })
-                                }
-                                onCancel={() => onCancelLeave(requestId)}
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <Pagination
-                page={page}
-                totalPages={requestPages}
-                total={requestTotal}
-                limit={limit}
-                loading={requestsLoading}
-                onPage={setPage}
-                onLimit={(n) => {
-                  setLimit(n);
-                  setPage(1);
+                <FilterSelect
+                  label="Leave type"
+                  value={draftEncashType}
+                  onChange={setDraftEncashType}
+                  options={leaveTypeOptions}
+                  clearable
+                  defaultValue="all"
+                />
+              </>
+            }
+            onApplyFilters={() => {
+              setFiscalYear(Number(draftFiscalYear));
+              setEncashTypeFilter(draftEncashType);
+              setEncashPage(1);
+            }}
+            onResetFilters={() => {
+              const y = String(currentYear);
+              setDraftFiscalYear(y);
+              setFiscalYear(currentYear);
+              setDraftEncashType("all");
+              setEncashTypeFilter("all");
+              setEncashPage(1);
+            }}
+            columns={encashColumns}
+            rows={filteredEncashRows}
+            getRowKey={(row) =>
+              row.encashmentId || row.requestId || row.id
+            }
+            minWidth="960px"
+            loading={encashLoading}
+            loadingLabel="Loading encashment"
+            loadingHint="Fetching encashment requests…"
+            emptyIcon={Banknote}
+            emptyTitle="No encashment requests"
+            emptyHint={
+              encashRows.length === 0
+                ? "Convert unused leave days to salary when your policy allows it."
+                : "No requests match these filters."
+            }
+            emptyAction={
+              <Button
+                type="button"
+                className="h-10 rounded-xl"
+                onClick={() => {
+                  setEncashForm((prev) => ({
+                    ...prev,
+                    fiscalYear: String(fiscalYear),
+                  }));
+                  setEncashOpen(true);
                 }}
-              />
-            </>
-          ) : (
-            <>
-              {encashLoading && encashRows.length === 0 ? (
-                <PageLoader
-                  compact
-                  label="Loading encashment"
-                  hint="Fetching encashment requests…"
-                />
-              ) : encashDisabled ? (
-                <EmptyState
-                  icon={Banknote}
-                  title="Encashment not available"
-                  hint={
-                    encashMessage ||
-                    "Leave encashment is not enabled for this company."
-                  }
-                />
-              ) : (
-                <>
-                  <div className="mb-4">
-                    <ListFiltersBar
-                      search={encashQuery}
-                      onSearchChange={setEncashQuery}
-                      searchPlaceholder="Search leave type, remarks, status…"
-                      status={encashStatus}
-                      onStatusChange={setEncashStatusFilter}
-                      statusOptions={REQUEST_STATUS_OPTIONS}
-                      type={encashTypeFilter}
-                      onTypeChange={setEncashTypeFilter}
-                      typeOptions={leaveTypeOptions}
-                      typeLabel="Leave type"
-                      loading={encashLoading}
-                      onBusyChange={setEncashFilterBusy}
-                    />
-                    <p className="mt-2 text-[12px] text-[var(--muted)]">
-                      {encashLoading || encashFilterBusy
-                        ? "Updating…"
-                        : `${filteredEncashRows.length} shown · ${encashTotal} total`}
-                    </p>
-                  </div>
-                  {encashLoading || encashFilterBusy ? (
-                    <PageLoader
-                      compact
-                      label={
-                        encashLoading
-                          ? "Loading encashment"
-                          : "Updating results"
-                      }
-                      hint={
-                        encashLoading
-                          ? "Fetching encashment requests…"
-                          : "Applying your search and filters…"
-                      }
-                    />
-                  ) : filteredEncashRows.length === 0 ? (
-                    <EmptyState
-                      icon={Banknote}
-                      title="No encashment requests"
-                      hint={
-                        encashRows.length === 0
-                          ? "Convert unused leave days to salary when your policy allows it."
-                          : "No requests match these filters."
-                      }
-                      action={
-                        <Button
-                          type="button"
-                          className="h-10 rounded-xl"
-                          onClick={() => {
-                            setEncashForm((prev) => ({
-                              ...prev,
-                              fiscalYear: String(fiscalYear),
-                            }));
-                            setEncashOpen(true);
-                          }}
-                        >
-                          Apply encashment
-                        </Button>
-                      }
-                    />
-                  ) : (
-                    <div className="overflow-x-auto rounded-2xl border border-[var(--border)]">
-                      <table className="min-w-full text-left text-[13px]">
-                        <thead>
-                          <tr className="border-b border-[var(--border)] bg-[var(--panel-soft)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
-                            <th className="w-12 px-3 py-2.5 font-semibold">#</th>
-                            <th className="px-3 py-2.5 font-semibold">
-                              Leave type
-                            </th>
-                            <th className="px-3 py-2.5 font-semibold">Days</th>
-                            <th className="px-3 py-2.5 font-semibold">
-                              Amount
-                            </th>
-                            <th className="px-3 py-2.5 font-semibold">FY</th>
-                            <th className="px-3 py-2.5 font-semibold">
-                              Status
-                            </th>
-                            <th className="px-3 py-2.5 font-semibold">
-                              Submitted
-                            </th>
-                            <th className="px-3 py-2.5 font-semibold">
-                              Remarks
-                            </th>
-                            <th className="px-3 py-2.5 font-semibold">
-                              Action
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredEncashRows.map((row, index) => {
-                            const id =
-                              row.encashmentId || row.requestId || row.id;
-                            const isPending =
-                              String(row.status || "").toLowerCase() ===
-                              "pending";
-                            const amount =
-                              row.amount ??
-                              row.encashmentAmount ??
-                              row.totalAmount ??
-                              row.payableAmount;
-                            return (
-                              <tr
-                                key={id}
-                                className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-soft)]/60"
-                              >
-                                <td className="px-3 py-3 tabular-nums text-[var(--muted)]">
-                                  {rowSerial(index, encashPage, encashLimit)}
-                                </td>
-                                <td className="px-3 py-3 font-medium text-[var(--text)]">
-                                  {row.leaveTypeName ||
-                                    leaveTypeName(
-                                  row.leaveTypeId,
-                                  leaveTypes,
-                                  balances
-                                )}
-                                </td>
-                                <td className="px-3 py-3 tabular-nums text-[var(--text)]">
-                                  {row.daysToEncash ?? row.days ?? "—"}
-                                </td>
-                                <td className="px-3 py-3 tabular-nums text-[var(--text)]">
-                                  {amount != null && amount !== ""
-                                    ? amount
-                                    : "—"}
-                                </td>
-                                <td className="px-3 py-3">
-                                  {row.fiscalYear ?? "—"}
-                                </td>
-                                <td className="px-3 py-3">
-                                  <StatusPill
-                                    status={row.status}
-                                    label={row.statusLabel || row.status}
-                                  />
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-3 text-[var(--muted)]">
-                                  {row.createdAt
-                                    ? formatDateTime(row.createdAt)
-                                    : row.requestedAt
-                                      ? formatDateTime(row.requestedAt)
-                                      : "—"}
-                                </td>
-                                <td
-                                  className="max-w-[160px] truncate px-3 py-3 text-[var(--muted)]"
-                                  title={row.remarks || ""}
-                                >
-                                  {row.remarks || "—"}
-                                </td>
-                                <td className="px-3 py-3">
-                                  <LeaveRequestRowActions
-                                    requestId={String(id)}
-                                    canEdit={false}
-                                    canCancel={isPending}
-                                    onView={() => setEncashDetail(row)}
-                                    onCancel={() => onCancelEncash(id)}
-                                  />
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  <Pagination
-                    page={encashPage}
-                    totalPages={encashPages}
-                    total={encashTotal}
-                    limit={encashLimit}
-                    loading={encashLoading}
-                    onPage={setEncashPage}
-                    onLimit={(n) => {
-                      setEncashLimit(n);
-                      setEncashPage(1);
-                    }}
-                  />
-                </>
-              )}
-            </>
-          )}
-        </div>
+              >
+                Apply encashment
+              </Button>
+            }
+            page={encashPage}
+            pageSize={encashLimit}
+            total={encashTotal}
+            totalPages={encashPages}
+            onPageChange={setEncashPage}
+            onPageSizeChange={(n) => {
+              setEncashLimit(n);
+              setEncashPage(1);
+            }}
+          />
+        )}
       </Card>
 
       {/* Apply leave slide-over */}
@@ -2071,6 +2030,6 @@ export function LeaveView({ initialTab = "requests" }) {
           </Button>
         </form>
       </SlideOver>
-    </div>
+    </PortalPage>
   );
 }

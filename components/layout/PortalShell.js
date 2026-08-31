@@ -51,28 +51,30 @@ function PortalShellInner({ children, employee, companySettings }) {
   }, [mergeLocalEmployee, profile?.designationName, profile?.firstName]);
 
   return (
-    <div className="flex min-h-screen bg-[var(--background)]">
+    <div className="flex h-screen overflow-hidden bg-[var(--background)]">
       <Sidebar
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
         collapsed={desktopCollapsed}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Header
-          employee={profile}
-          timezone={companySettings?.timezone}
-          sidebarCollapsed={desktopCollapsed}
-          notificationCount={unreadCount}
-          onMenuClick={() => {
-            if (typeof window !== "undefined" && window.innerWidth >= 1024) {
-              setDesktopCollapsed((value) => !value);
-              return;
-            }
-            setMobileOpen((value) => !value);
-          }}
-        />
-        <main className="min-w-0 flex-1 overflow-x-hidden p-4 md:p-5 lg:p-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="shrink-0">
+          <Header
+            employee={profile}
+            timezone={companySettings?.timezone}
+            sidebarCollapsed={desktopCollapsed}
+            notificationCount={unreadCount}
+            onMenuClick={() => {
+              if (typeof window !== "undefined" && window.innerWidth >= 1024) {
+                setDesktopCollapsed((value) => !value);
+                return;
+              }
+              setMobileOpen((value) => !value);
+            }}
+          />
+        </div>
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto p-4 md:p-5 lg:p-6">
           {children}
         </main>
       </div>

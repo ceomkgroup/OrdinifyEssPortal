@@ -9,12 +9,10 @@ import {
   Eye,
   Hourglass,
   Inbox,
-  Info,
   MoreVertical,
   Plus,
   RefreshCw,
   Send,
-  Timer,
   X,
   XCircle,
 } from "lucide-react";
@@ -22,11 +20,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { getAttendanceHistory } from "@/api/attendance";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { FlashBanner } from "@/components/ui/FlashBanner";
-import { ListFiltersBar } from "@/components/ui/ListFilters";
+import { FilterDate } from "@/components/ui/ListFilters";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { PortalPage } from "@/components/ui/PortalPage";
 import { SlideOver } from "@/components/ui/SlideOver";
-import { PageLoader } from "@/components/ui/Spinner";
+import { TablePanel } from "@/components/ui/TablePanel";
 import {
   cancelOvertime,
   submitOvertime,
@@ -34,18 +33,15 @@ import {
   useOvertimeStats,
 } from "@/hooks/useOvertime";
 import {
+  countActiveDateFilters,
+  dateInRange,
+} from "@/lib/request-date-filter";
+import {
   formatDate,
   formatDateTime,
   formatTime,
   rowSerial,
 } from "@/lib/format";
-
-const STATUS_OPTIONS = [
-  { value: "all", label: "All requests" },
-  { value: "pending", label: "Pending" },
-  { value: "approved", label: "Approved" },
-  { value: "cancelled", label: "Cancelled" },
-];
 
 const WEEKDAYS = [
   "Sunday",
@@ -550,9 +546,12 @@ export function OvertimeView({
 }) {
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
-  const [limit] = useState(10);
+  const [limit, setLimit] = useState(10);
   const [listQuery, setListQuery] = useState("");
-  const [filterBusy, setFilterBusy] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [draftDateFrom, setDraftDateFrom] = useState("");
+  const [draftDateTo, setDraftDateTo] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState(null);
 
@@ -572,10 +571,27 @@ export function OvertimeView({
   });
   const { stats, refetch: refetchStats } = useOvertimeStats();
 
+  useEffect(() => {
+    setDraftDateFrom(dateFrom);
+    setDraftDateTo(dateTo);
+  }, [dateFrom, dateTo]);
+
+  const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
+
   const filteredRows = useMemo(() => {
     const q = listQuery.trim().toLowerCase();
-    if (!q) return rows || [];
     return (rows || []).filter((row) => {
+      if (
+        (dateFrom || dateTo) &&
+        !dateInRange(
+          row.attendanceDate || row.createdAt,
+          dateFrom,
+          dateTo
+        )
+      ) {
+        return false;
+      }
+      if (!q) return true;
       const hay = [
         row.reason,
         row.status,
@@ -591,7 +607,7 @@ export function OvertimeView({
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [rows, listQuery]);
+  }, [rows, listQuery, dateFrom, dateTo]);
 
   useEffect(() => {
     let alive = true;
@@ -641,6 +657,107 @@ export function OvertimeView({
   const total = Number(meta?.total) || 0;
   const currentPage = Number(meta?.page) || page;
   const totalPages = Math.max(1, Number(meta?.totalPages) || 1);
+
+  const columns = useMemo(
+    () => [
+      {
+        id: "serial",
+        header: "#",
+        headerClassName: "w-12",
+        cellClassName: "tabular-nums text-[var(--muted)]",
+        cell: (_row, { index }) => rowSerial(index, currentPage, limit),
+      },
+      {
+        id: "attendanceDate",
+        header: "Attendance Date",
+        cellClassName: "whitespace-nowrap font-medium text-[var(--text)]",
+        cell: (row) => (
+          <span className="inline-flex items-center gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5 text-[var(--violet)]" />
+            {formatDateWithWeekday(row.attendanceDate, dateFormat)}
+          </span>
+        ),
+      },
+      {
+        id: "overtime",
+        header: "Overtime",
+        cellClassName: "whitespace-nowrap tabular-nums text-[var(--text)]",
+        cell: (row) => (
+          <span className="inline-flex items-center gap-1.5">
+            <Clock3 className="h-3.5 w-3.5 text-[var(--violet)]" />
+            {formatOtDuration(row.overtimeMinutes)}
+          </span>
+        ),
+      },
+      {
+        id: "reason",
+        header: "Reason",
+        cellClassName: "max-w-[220px] truncate text-[var(--muted)]",
+        cell: (row) => row.reason || "—",
+      },
+      {
+        id: "status",
+        header: "Status",
+        cellClassName: "whitespace-nowrap",
+        cell: (row) => {
+          const label = normalizeStatusLabel(row.status, row.statusLabel);
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span
+                className={`inline-flex w-fit rounded-full border px-2.5 py-0.5 text-[11px] font-semibold capitalize ${statusTone(row.status)}`}
+              >
+                {label}
+              </span>
+              {row.levelName ? (
+                <span className="text-[10px] text-[var(--muted)]">
+                  {row.levelName}
+                </span>
+              ) : null}
+            </div>
+          );
+        },
+      },
+      {
+        id: "level",
+        header: "Level",
+        cellClassName: "whitespace-nowrap text-[var(--muted)]",
+        cell: (row) =>
+          row.currentLevel != null && row.totalLevels != null
+            ? `${row.currentLevel} of ${row.totalLevels}`
+            : row.currentLevel != null
+              ? String(row.currentLevel)
+              : "—",
+      },
+      {
+        id: "created",
+        header: "Created",
+        cellClassName: "whitespace-nowrap text-[var(--muted)]",
+        cell: (row) =>
+          row.createdAt
+            ? formatDateTime(row.createdAt, dateFormat, timeFormat)
+            : "—",
+      },
+      {
+        id: "action",
+        header: "Action",
+        cell: (row) => {
+          const isPending =
+            String(row.status || "").toLowerCase() === "pending";
+          return (
+            <RequestRowActions
+              requestId={row.otRequestId}
+              canCancel={isPending}
+              onView={() => setSelected(row)}
+              onCancel={() => handleCancel(row.otRequestId)}
+            />
+          );
+        },
+      },
+    ],
+    // handleCancel is stable enough via closure; columns refresh with list state
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentPage, limit, dateFormat, timeFormat]
+  );
 
   function refreshAll() {
     refetch();
@@ -730,47 +847,37 @@ export function OvertimeView({
   }
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--card-shadow)] sm:p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="flex items-start gap-3">
-            <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--lavender-soft)] text-[var(--violet)]">
-              <Timer className="h-5 w-5" />
-            </span>
-            <div>
-              <h1 className="text-[22px] font-bold tracking-tight text-[var(--text)]">
-                Overtime
-              </h1>
-              <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-[var(--muted)]">
-                Submit and track overtime requests for extra hours worked.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 md:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 rounded-xl"
-              onClick={refreshAll}
-            >
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </Button>
-            <Button
-              type="button"
-              className="h-10 rounded-xl"
-              onClick={() => {
-                setShowForm(true);
-                setFormError("");
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              New Overtime Request
-            </Button>
-          </div>
-        </div>
-      </section>
+    <PortalPage
+      fill
+      title="Overtime"
+      subtitle="Submit and track overtime requests for extra hours worked."
+      actions={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 rounded-xl"
+            onClick={refreshAll}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          <Button
+            type="button"
+            className="h-10 rounded-xl"
+            onClick={() => {
+              setShowForm(true);
+              setFormError("");
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            New Overtime Request
+          </Button>
+        </>
+      }
+    >
 
+      <CollapsibleSection title="Summary">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="Total Requests"
@@ -797,6 +904,7 @@ export function OvertimeView({
           tone="bg-[var(--danger-soft)] text-[var(--danger)]"
         />
       </div>
+      </CollapsibleSection>
 
       {flash ? (
         <FlashBanner
@@ -807,208 +915,97 @@ export function OvertimeView({
         />
       ) : null}
 
-      <Card bodyClassName="!min-h-0">
-        <div className="mb-4">
-          <div className="mb-3">
-            <h3 className="text-[15px] font-semibold text-[var(--text)]">
-              My requests
-            </h3>
-            <p className="mt-0.5 text-[12px] text-[var(--muted)]">
-              Track pending, approved and cancelled overtime requests
-            </p>
-          </div>
-          <ListFiltersBar
-            search={listQuery}
-            onSearchChange={setListQuery}
-            searchPlaceholder="Search date, reason, status…"
-            status={status}
-            onStatusChange={(next) => {
-              setStatus(next);
-              setPage(1);
-            }}
-            statusOptions={STATUS_OPTIONS}
-            loading={loading}
-            onBusyChange={setFilterBusy}
-          />
-        </div>
-
-        {error ? (
-          <FlashBanner
-            message={error}
-            tone="danger"
-            className="mb-3"
-            duration={5000}
-            autoDismiss={false}
-          />
-        ) : null}
-
-        {loading || filterBusy ? (
-          <PageLoader
-            compact
-            label={loading ? "Loading requests" : "Updating results"}
-            hint={
-              loading
-                ? "Fetching overtime requests…"
-                : "Applying your search and filters…"
-            }
-          />
-        ) : filteredRows.length === 0 ? (
-          <div className="flex min-h-[200px] flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] px-4 text-center">
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--lavender-soft)] text-[var(--violet)]">
-              <Inbox className="h-6 w-6" />
-            </span>
-            <p className="mt-3 text-[14px] font-semibold text-[var(--text)]">
-              No {status === "all" ? "" : `${status} `}requests
-            </p>
-            <p className="mt-1 max-w-sm text-[12px] text-[var(--muted)]">
-              Submit a request when you work beyond your scheduled hours.
-            </p>
-            <Button
-              type="button"
-              className="mt-4 h-10 rounded-xl"
-              onClick={() => setShowForm(true)}
-            >
-              <Plus className="h-4 w-4" />
-              New Overtime Request
-            </Button>
-          </div>
-        ) : (
+      <TablePanel
+        title="Overtime Logs"
+        tabs={[
+          { value: "all", label: "All" },
+          { value: "pending", label: "Pending" },
+          { value: "approved", label: "Approved" },
+          { value: "cancelled", label: "Cancelled" },
+        ]}
+        tab={status}
+        onTabChange={(next) => {
+          setStatus(next);
+          setPage(1);
+        }}
+        recordCount={
+          listQuery.trim() || dateFilterCount > 0
+            ? filteredRows.length
+            : total
+        }
+        search={listQuery}
+        onSearchChange={setListQuery}
+        searchPlaceholder="Search date, reason, status…"
+        filterActive={dateFilterCount > 0}
+        activeFilterCount={dateFilterCount}
+        drawerFields={
           <>
-            <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-              <table className="min-w-full text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-[var(--border)] bg-[var(--panel-soft)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
-                    <th className="w-12 whitespace-nowrap px-3 py-2.5 font-semibold">
-                      #
-                    </th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                      Attendance Date
-                    </th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                      Overtime
-                    </th>
-                    <th className="px-3 py-2.5 font-semibold">Reason</th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                      Status
-                    </th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                      Level
-                    </th>
-                    <th className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                      Created
-                    </th>
-                    <th className="px-3 py-2.5 font-semibold">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.map((row, index) => {
-                    const label = normalizeStatusLabel(
-                      row.status,
-                      row.statusLabel
-                    );
-                    const isPending =
-                      String(row.status || "").toLowerCase() === "pending";
-                    return (
-                      <tr
-                        key={row.otRequestId}
-                        className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-soft)]/50"
-                      >
-                        <td className="px-3 py-3 tabular-nums text-[var(--muted)]">
-                          {rowSerial(index, page, limit)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3 font-medium text-[var(--text)]">
-                          <span className="inline-flex items-center gap-1.5">
-                            <CalendarDays className="h-3.5 w-3.5 text-[var(--violet)]" />
-                            {formatDateWithWeekday(
-                              row.attendanceDate,
-                              dateFormat
-                            )}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3 tabular-nums text-[var(--text)]">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Clock3 className="h-3.5 w-3.5 text-[var(--violet)]" />
-                            {formatOtDuration(row.overtimeMinutes)}
-                          </span>
-                        </td>
-                        <td className="max-w-[220px] truncate px-3 py-3 text-[var(--muted)]">
-                          {row.reason || "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3">
-                          <div className="flex flex-col gap-0.5">
-                            <span
-                              className={`inline-flex w-fit rounded-full border px-2.5 py-0.5 text-[11px] font-semibold capitalize ${statusTone(row.status)}`}
-                            >
-                              {label}
-                            </span>
-                            {row.levelName ? (
-                              <span className="text-[10px] text-[var(--muted)]">
-                                {row.levelName}
-                              </span>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3 text-[var(--muted)]">
-                          {row.currentLevel != null && row.totalLevels != null
-                            ? `${row.currentLevel} of ${row.totalLevels}`
-                            : row.currentLevel != null
-                              ? String(row.currentLevel)
-                              : "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3 text-[var(--muted)]">
-                          {row.createdAt
-                            ? formatDateTime(
-                                row.createdAt,
-                                dateFormat,
-                                timeFormat
-                              )
-                            : "—"}
-                        </td>
-                        <td className="px-3 py-3">
-                          <RequestRowActions
-                            requestId={row.otRequestId}
-                            canCancel={isPending}
-                            onView={() => setSelected(row)}
-                            onCancel={() => handleCancel(row.otRequestId)}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[12px] text-[var(--muted)]">
-                Showing page {currentPage} of {totalPages} · {total} total
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-9 rounded-lg px-2"
-                  disabled={currentPage <= 1 || loading}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-9 rounded-lg px-2"
-                  disabled={currentPage >= totalPages || loading}
-                  onClick={() => setPage((p) => p + 1)}
-                  aria-label="Next page"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <FilterDate
+              label="From date"
+              value={draftDateFrom}
+              onChange={setDraftDateFrom}
+              max={draftDateTo || undefined}
+              clearable
+            />
+            <FilterDate
+              label="To date"
+              value={draftDateTo}
+              onChange={setDraftDateTo}
+              min={draftDateFrom || undefined}
+              clearable
+            />
           </>
-        )}
-      </Card>
+        }
+        onApplyFilters={() => {
+          setDateFrom(draftDateFrom);
+          setDateTo(draftDateTo);
+          setPage(1);
+        }}
+        onResetFilters={() => {
+          setDraftDateFrom("");
+          setDraftDateTo("");
+          setDateFrom("");
+          setDateTo("");
+          setPage(1);
+        }}
+        onRefresh={refreshAll}
+        columns={columns}
+        rows={filteredRows}
+        getRowKey={(row) => row.otRequestId}
+        minWidth="900px"
+        loading={loading}
+        loadingLabel="Loading requests"
+        loadingHint="Fetching overtime requests…"
+        error={error}
+        emptyIcon={Inbox}
+        emptyTitle={`No ${status === "all" ? "" : `${status} `}requests`}
+        emptyHint="Submit a request when you work beyond your scheduled hours."
+        emptyAction={
+          <Button
+            type="button"
+            className="h-10 rounded-xl"
+            onClick={() => setShowForm(true)}
+          >
+            <Plus className="h-4 w-4" />
+            New Overtime Request
+          </Button>
+        }
+        page={currentPage}
+        pageSize={limit}
+        total={
+          listQuery.trim() || dateFilterCount > 0
+            ? filteredRows.length
+            : total
+        }
+        totalPages={
+          listQuery.trim() || dateFilterCount > 0 ? 1 : totalPages
+        }
+        onPageChange={setPage}
+        onPageSizeChange={(n) => {
+          setLimit(n);
+          setPage(1);
+        }}
+      />
 
       <SlideOver
         open={showForm}
@@ -1139,17 +1136,6 @@ export function OvertimeView({
                   Provide a valid reason for overtime request
                 </p>
               </div>
-            </div>
-
-            <div className="flex gap-2.5 rounded-xl border border-[var(--violet)]/15 bg-[var(--lavender-soft)]/60 px-3.5 py-3">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-[var(--violet)]" />
-              <p className="text-[12px] leading-relaxed text-[var(--muted)]">
-                <span className="font-semibold text-[var(--text)]">
-                  Important note:
-                </span>{" "}
-                Overtime requests are subject to manager approval. You will be
-                notified once your request is reviewed.
-              </p>
             </div>
 
             {formError ? (
@@ -1299,6 +1285,6 @@ export function OvertimeView({
           </div>
         ) : null}
       </SlideOver>
-    </div>
+    </PortalPage>
   );
 }

@@ -9,10 +9,14 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { FlashBanner } from "@/components/ui/FlashBanner";
+import { FilterSelect } from "@/components/ui/ListFilters";
+import { ListToolbar } from "@/components/ui/ListToolbar";
+import { MetaBadge } from "@/components/ui/MetaBadge";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
 import { useHolidays } from "@/hooks/useHolidays";
 import { formatDate } from "@/lib/format";
@@ -209,11 +213,28 @@ function MonthCalendar({ year, month, holidaysByDate, dateFormat }) {
 
 export function HolidaysView({ dateFormat = "DD/MM/YYYY" }) {
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
+  const currentYear = now.getFullYear();
+  const [year, setYear] = useState(currentYear);
+  const [draftYear, setDraftYear] = useState(String(currentYear));
   const [filter, setFilter] = useState("all"); // all | upcoming | optional | passed
   const [viewMonth, setViewMonth] = useState(now.getMonth());
 
   const { rows, total, loading, error, refetch } = useHolidays({ year });
+
+  useEffect(() => {
+    setDraftYear(String(year));
+  }, [year]);
+
+  const yearFilterOptions = useMemo(() => {
+    const y = currentYear;
+    const options = [];
+    for (let i = y - 5; i <= y + 2; i += 1) {
+      options.push({ value: String(i), label: String(i) });
+    }
+    return options;
+  }, [currentYear]);
+
+  const yearFilterActive = year !== currentYear;
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -297,152 +318,116 @@ export function HolidaysView({ dateFormat = "DD/MM/YYYY" }) {
   ];
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--card-shadow)] sm:p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="flex items-start gap-3">
-            <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--lavender-soft)] text-[var(--violet)]">
-              <CalendarDays className="h-5 w-5" />
-            </span>
-            <div>
-              <h1 className="text-[22px] font-bold tracking-tight text-[var(--text)]">
-                Company Holidays
-              </h1>
-              <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-[var(--muted)]">
-                View the official holiday calendar for your company.
-              </p>
-            </div>
+    <PortalPage
+      title="Company Holidays"
+      subtitle="View the official holiday calendar for your company."
+      error={error}
+      actions={
+        <>
+          <MetaBadge>{year}</MetaBadge>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 rounded-xl"
+            onClick={refetch}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+        </>
+      }
+    >
+
+      {nextHoliday ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--violet)]/20 bg-gradient-to-br from-[var(--lavender-soft)]/80 via-[var(--surface)] to-[var(--surface)] px-4 py-3.5">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--surface)] text-[var(--violet)] shadow-sm">
+            <Sparkles className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Next holiday
+            </p>
+            <p className="mt-0.5 text-[14px] font-semibold text-[var(--text)]">
+              {nextHoliday.title}
+            </p>
+            <p className="mt-0.5 text-[12px] text-[var(--muted)]">
+              {formatPeriod(
+                nextHoliday.fromDate,
+                nextHoliday.toDate,
+                dateFormat
+              )}
+              {nextHoliday.holidayTypeLabel
+                ? ` · ${nextHoliday.holidayTypeLabel}`
+                : ""}
+              {nextHoliday.typeName ? ` · ${nextHoliday.typeName}` : ""}
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 md:justify-end">
-            <div className="inline-flex items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1">
-              <button
-                type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-                onClick={() => setYear((y) => y - 1)}
-                aria-label="Previous year"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="min-w-[4.5rem] text-center text-[13px] font-semibold tabular-nums text-[var(--text)]">
-                {year}
-              </span>
-              <button
-                type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-                onClick={() => setYear((y) => y + 1)}
-                aria-label="Next year"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 rounded-xl"
-              onClick={refetch}
-            >
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </Button>
-          </div>
+          <span className="rounded-full bg-[var(--violet)] px-3 py-1 text-[11px] font-semibold text-white">
+            {formatCountdown(daysUntil(nextHoliday.fromDate))}
+          </span>
         </div>
-
-        {nextHoliday ? (
-          <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--violet)]/20 bg-gradient-to-br from-[var(--lavender-soft)]/80 via-[var(--surface)] to-[var(--surface)] px-4 py-3.5">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--surface)] text-[var(--violet)] shadow-sm">
-              <Sparkles className="h-4 w-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Next holiday
-              </p>
-              <p className="mt-0.5 text-[14px] font-semibold text-[var(--text)]">
-                {nextHoliday.title}
-              </p>
-              <p className="mt-0.5 text-[12px] text-[var(--muted)]">
-                {formatPeriod(
-                  nextHoliday.fromDate,
-                  nextHoliday.toDate,
-                  dateFormat
-                )}
-                {nextHoliday.holidayTypeLabel
-                  ? ` · ${nextHoliday.holidayTypeLabel}`
-                  : ""}
-                {nextHoliday.typeName ? ` · ${nextHoliday.typeName}` : ""}
-              </p>
-            </div>
-            <span className="rounded-full bg-[var(--violet)] px-3 py-1 text-[11px] font-semibold text-white">
-              {formatCountdown(daysUntil(nextHoliday.fromDate))}
-            </span>
-          </div>
-        ) : null}
-      </section>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          label="Total"
-          value={stats.total}
-          icon={Inbox}
-          tone="bg-[var(--info-soft)] text-[var(--info)]"
-        />
-        <StatCard
-          label="Upcoming"
-          value={stats.upcoming}
-          icon={Sparkles}
-          tone="bg-[var(--lavender-soft)] text-[var(--violet)]"
-        />
-        <StatCard
-          label="Optional"
-          value={stats.optional}
-          icon={Gift}
-          tone="bg-[var(--warning-soft)] text-[var(--warning)]"
-        />
-        <StatCard
-          label="This month"
-          value={stats.thisMonth}
-          icon={CalendarDays}
-          tone="bg-[var(--success-soft)] text-[var(--success)]"
-        />
-      </div>
-
-      {error ? (
-        <FlashBanner
-          message={error}
-          tone="danger"
-          duration={5000}
-          autoDismiss={false}
-        />
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card bodyClassName="!min-h-0">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-[15px] font-semibold text-[var(--text)]">
-                Holiday list
-              </h3>
-              <p className="mt-0.5 text-[12px] text-[var(--muted)]">
-                {year} calendar · {filteredRows.length} shown
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {FILTERS.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  onClick={() => setFilter(item.value)}
-                  className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition ${
-                    filter === item.value
-                      ? "bg-[var(--violet)] text-white"
-                      : "bg-[var(--panel-soft)] text-[var(--muted)] hover:text-[var(--text)]"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
+      <CollapsibleSection title="Summary">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard
+            label="Total"
+            value={stats.total}
+            icon={Inbox}
+            tone="bg-[var(--info-soft)] text-[var(--info)]"
+          />
+          <StatCard
+            label="Upcoming"
+            value={stats.upcoming}
+            icon={Sparkles}
+            tone="bg-[var(--lavender-soft)] text-[var(--violet)]"
+          />
+          <StatCard
+            label="Optional"
+            value={stats.optional}
+            icon={Gift}
+            tone="bg-[var(--warning-soft)] text-[var(--warning)]"
+          />
+          <StatCard
+            label="This month"
+            value={stats.thisMonth}
+            icon={CalendarDays}
+            tone="bg-[var(--success-soft)] text-[var(--success)]"
+          />
+        </div>
+      </CollapsibleSection>
 
+      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card bodyClassName="!min-h-0 !p-0">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-2.5">
+            <h2 className="heading-section">
+              Holiday Logs
+            </h2>
+          </div>
+          <ListToolbar
+            tabs={FILTERS}
+            tab={filter}
+            onTabChange={setFilter}
+            recordCount={filteredRows.length}
+            filterActive={yearFilterActive}
+            activeFilterCount={yearFilterActive ? 1 : 0}
+            drawerFields={
+              <FilterSelect
+                label="Calendar year"
+                value={draftYear}
+                onChange={setDraftYear}
+                options={yearFilterOptions}
+              />
+            }
+            onApplyFilters={() => {
+              setYear(Number(draftYear));
+            }}
+            onResetFilters={() => {
+              setDraftYear(String(currentYear));
+              setYear(currentYear);
+            }}
+          />
+          <div className="p-4 md:p-5">
           {loading ? (
             <PageLoader
               compact
@@ -564,6 +549,7 @@ export function HolidaysView({ dateFormat = "DD/MM/YYYY" }) {
               ))}
             </div>
           )}
+          </div>
         </Card>
 
         <div className="space-y-4">
@@ -623,6 +609,6 @@ export function HolidaysView({ dateFormat = "DD/MM/YYYY" }) {
           </div>
         </div>
       </div>
-    </div>
+    </PortalPage>
   );
 }

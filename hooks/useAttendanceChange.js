@@ -43,6 +43,70 @@ export function useAttendanceChangeList({ status = "all", page = 1, limit = 10 }
   return { rows, meta, loading, error, refetch };
 }
 
+/** Best-effort status counts from a larger all-status page. */
+export function useAttendanceChangeStats({ enabled = true } = {}) {
+  const [stats, setStats] = useState({
+    total: 0,
+    pending: 0,
+    approved: 0,
+    cancelled: 0,
+  });
+  const [loading, setLoading] = useState(Boolean(enabled));
+  const [reloadTick, setReloadTick] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return undefined;
+    }
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await listAttendanceChangeRequests({
+          status: "all",
+          page: 1,
+          limit: 100,
+        });
+        if (!alive) return;
+        const next = {
+          total: Number(res.meta?.total) || (res.rows || []).length,
+          pending: 0,
+          approved: 0,
+          cancelled: 0,
+        };
+        for (const row of res.rows || []) {
+          const s = String(row.status || "").toLowerCase();
+          if (s === "rejected" || s === "cancelled" || s === "canceled") {
+            next.cancelled += 1;
+          } else if (s in next) {
+            next[s] += 1;
+          }
+        }
+        setStats(next);
+      } catch {
+        if (alive) {
+          setStats({
+            total: 0,
+            pending: 0,
+            approved: 0,
+            cancelled: 0,
+          });
+        }
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [enabled, reloadTick]);
+
+  const refetch = useCallback(() => setReloadTick((n) => n + 1), []);
+
+  return { stats, loading, refetch };
+}
+
 export function useAttendanceChangeDetail(requestId) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(Boolean(requestId));

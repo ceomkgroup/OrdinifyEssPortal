@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowUpRight,
@@ -12,18 +12,20 @@ import {
   Layers,
   Plus,
   RefreshCw,
-  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ComingSoon } from "@/components/ui/ComingSoon";
-import { FlashBanner } from "@/components/ui/FlashBanner";
-import {
-  ListFiltersBar,
-  REQUEST_STATUS_OPTIONS,
-} from "@/components/ui/ListFilters";
+import { FilterSelect, FilterDate, REQUEST_STATUS_OPTIONS } from "@/components/ui/ListFilters";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
+import { TablePanel } from "@/components/ui/TablePanel";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { useAllRequests } from "@/hooks/useAllRequests";
+import {
+  countActiveDateFilters,
+  dateInRange,
+} from "@/lib/request-date-filter";
 import { formatDateTime, rowSerial } from "@/lib/format";
 import { REQUEST_TYPES } from "@/lib/request-types";
 
@@ -96,8 +98,32 @@ export function RequestsHubView() {
 
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [draftTypeFilter, setDraftTypeFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [draftDateFrom, setDraftDateFrom] = useState("");
+  const [draftDateTo, setDraftDateTo] = useState("");
   const [query, setQuery] = useState("");
-  const [filterBusy, setFilterBusy] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+
+  useEffect(() => {
+    setDraftTypeFilter(typeFilter);
+  }, [typeFilter]);
+
+  useEffect(() => {
+    setDraftDateFrom(dateFrom);
+    setDraftDateTo(dateTo);
+  }, [dateFrom, dateTo]);
+
+  const statusTabs = REQUEST_STATUS_OPTIONS.map((item) => ({
+    value: item.value,
+    label: item.value === "all" ? "All" : item.label.split(" / ")[0],
+  }));
+
+  const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
+  const activeFilterCount =
+    (typeFilter !== "all" ? 1 : 0) + dateFilterCount;
 
   const pendingCounts = useMemo(() => {
     const counts = {};
@@ -124,6 +150,12 @@ export function RequestsHubView() {
         return false;
       }
       if (typeFilter !== "all" && row.typeKey !== typeFilter) return false;
+      if (
+        (dateFrom || dateTo) &&
+        !dateInRange(row.createdAt, dateFrom, dateTo)
+      ) {
+        return false;
+      }
       if (!q) return true;
       return (
         row.typeLabel.toLowerCase().includes(q) ||
@@ -133,7 +165,81 @@ export function RequestsHubView() {
         String(row.reason).toLowerCase().includes(q)
       );
     });
-  }, [rows, statusFilter, typeFilter, query]);
+  }, [rows, statusFilter, typeFilter, dateFrom, dateTo, query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, typeFilter, dateFrom, dateTo, query]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / limit) || 1);
+  const currentPage = Math.min(page, totalPages);
+
+  const pagedRows = useMemo(() => {
+    const start = (currentPage - 1) * limit;
+    return filtered.slice(start, start + limit);
+  }, [filtered, currentPage, limit]);
+
+  const columns = useMemo(
+    () => [
+      {
+        id: "serial",
+        header: "#",
+        headerClassName: "w-12",
+        cellClassName: "whitespace-nowrap tabular-nums text-[var(--muted)]",
+        cell: (_row, { index }) => rowSerial(index, currentPage, limit),
+      },
+      {
+        id: "type",
+        header: "Type",
+        cellClassName: "whitespace-nowrap font-semibold text-[var(--text)]",
+        cell: (row) => row.typeLabel.replace(" Request", ""),
+      },
+      {
+        id: "summary",
+        header: "Summary",
+        cellClassName: "max-w-[220px] text-[var(--text)]",
+        cell: (row) => <p className="truncate">{row.summary}</p>,
+      },
+      {
+        id: "period",
+        header: "Period",
+        cellClassName: "whitespace-nowrap text-[var(--muted)]",
+        cell: (row) => row.period,
+      },
+      {
+        id: "submitted",
+        header: "Submitted",
+        cellClassName: "whitespace-nowrap text-[var(--muted)]",
+        cell: (row) =>
+          row.createdAt ? formatDateTime(row.createdAt) : "—",
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (row) => (
+          <span
+            className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold capitalize ${statusTone(row.status)}`}
+          >
+            {row.status}
+          </span>
+        ),
+      },
+      {
+        id: "action",
+        header: " ",
+        cell: (row) => (
+          <Link
+            href={row.href}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 text-[12px] font-semibold text-[var(--violet)] transition hover:bg-[var(--lavender-soft)]"
+          >
+            Open
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        ),
+      },
+    ],
+    [currentPage, limit]
+  );
 
   const pendingTotal = rows.filter((r) => r.statusBucket === "pending").length;
   const approvedTotal = rows.filter((r) => r.statusBucket === "approved").length;
@@ -158,14 +264,6 @@ export function RequestsHubView() {
     ];
   }, [rows, sources, liveTiles]);
 
-  const statusOptions = REQUEST_STATUS_OPTIONS.map((item) => ({
-    ...item,
-    count:
-      item.value === "all"
-        ? rows.length
-        : rows.filter((r) => r.statusBucket === item.value).length,
-  }));
-
   if (!modulesLoading && visibleTiles.length === 0) {
     return (
       <ComingSoon
@@ -182,103 +280,90 @@ export function RequestsHubView() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-5">
-      {/* Hero + KPIs */}
-      <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--card-shadow)] md:p-6">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[var(--lavender-soft)] opacity-70 blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-[var(--violet-soft)] opacity-50 blur-2xl" />
+    <PortalPage
+      fill
+      title="All requests"
+      subtitle="Track every request in one list. Open a type to apply with its own rules and forms."
+      actions={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 rounded-xl"
+            onClick={refetch}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          <NewRequestMenu tiles={liveTiles} />
+        </>
+      }
+    >
 
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--lavender-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--violet)]">
-              <Sparkles className="h-3.5 w-3.5" />
-              My requests
-            </div>
-            <h1 className="mt-2 font-[family-name:var(--font-heading)] text-[26px] font-semibold tracking-tight text-[var(--text)] md:text-[30px]">
-              All requests
-            </h1>
-            <p className="mt-1 max-w-xl text-[13px] text-[var(--muted)]">
-              Track every request in one list. Open a type to apply with its own
-              rules and forms.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 rounded-xl"
-              onClick={refetch}
+      <CollapsibleSection title="Summary">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {[
+          {
+            label: "In this list",
+            value: loading ? "…" : String(rows.length),
+            icon: Inbox,
+            soft: "bg-[var(--info-soft)]",
+            tone: "text-[var(--info)]",
+          },
+          {
+            label: "Pending",
+            value: loading ? "…" : String(pendingTotal),
+            icon: Hourglass,
+            soft: "bg-[var(--warning-soft)]",
+            tone: "text-[var(--warning)]",
+          },
+          {
+            label: "Approved",
+            value: loading ? "…" : String(approvedTotal),
+            icon: CheckCircle2,
+            soft: "bg-[var(--success-soft)]",
+            tone: "text-[var(--success)]",
+          },
+          {
+            label: "Live modules",
+            value: String(liveTiles.length),
+            icon: Layers,
+            soft: "bg-[var(--lavender-soft)]",
+            tone: "text-[var(--violet)]",
+          },
+        ].map((kpi) => {
+          const Icon = kpi.icon;
+          return (
+            <div
+              key={kpi.label}
+              className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3"
             >
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </Button>
-            <NewRequestMenu tiles={liveTiles} />
-          </div>
-        </div>
-
-        <div className="relative mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          {[
-            {
-              label: "In this list",
-              value: loading ? "…" : String(rows.length),
-              icon: Inbox,
-              soft: "bg-[var(--info-soft)]",
-              tone: "text-[var(--info)]",
-            },
-            {
-              label: "Pending",
-              value: loading ? "…" : String(pendingTotal),
-              icon: Hourglass,
-              soft: "bg-[var(--warning-soft)]",
-              tone: "text-[var(--warning)]",
-            },
-            {
-              label: "Approved",
-              value: loading ? "…" : String(approvedTotal),
-              icon: CheckCircle2,
-              soft: "bg-[var(--success-soft)]",
-              tone: "text-[var(--success)]",
-            },
-            {
-              label: "Live modules",
-              value: String(liveTiles.length),
-              icon: Layers,
-              soft: "bg-[var(--lavender-soft)]",
-              tone: "text-[var(--violet)]",
-            },
-          ].map((kpi) => {
-            const Icon = kpi.icon;
-            return (
-              <div
-                key={kpi.label}
-                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/80 px-3.5 py-3 backdrop-blur"
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${kpi.soft} ${kpi.tone}`}
-                  >
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <p className="text-[11px] font-medium text-[var(--muted)]">
-                    {kpi.label}
-                  </p>
-                </div>
-                <p className="mt-2 text-[22px] font-bold tabular-nums leading-none text-[var(--text)]">
-                  {kpi.value}
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${kpi.soft} ${kpi.tone}`}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
+                <p className="text-[11px] font-medium text-[var(--muted)]">
+                  {kpi.label}
                 </p>
               </div>
-            );
-          })}
+              <p className="mt-2 text-[22px] font-bold tabular-nums leading-none text-[var(--text)]">
+                {kpi.value}
+              </p>
+            </div>
+          );
+        })}
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* Apply by type — type-specific pages */}
       <section>
         <div className="mb-3">
-          <h2 className="font-[family-name:var(--font-heading)] text-[15px] font-semibold text-[var(--text)]">
+          <h2 className="heading-section">
             Apply by type
           </h2>
-          <p className="text-[12px] text-[var(--muted)]">
+          <p className="heading-sub">
             Forms, balances, and rules live on each module page
           </p>
         </div>
@@ -324,123 +409,80 @@ export function RequestsHubView() {
       </section>
 
       {/* Unified list */}
-      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--card-shadow)]">
-        <div className="border-b border-[var(--border)] p-4 md:p-5">
-          <div className="mb-4">
-            <h2 className="font-[family-name:var(--font-heading)] text-[15px] font-semibold text-[var(--text)]">
-              Request history
-            </h2>
-            <p className="text-[12px] text-[var(--muted)]">
-              Leave, encashment, attendance change — one table
-            </p>
-          </div>
-
-          <ListFiltersBar
-            search={query}
-            onSearchChange={setQuery}
-            searchPlaceholder="Search summary, type, reason…"
-            status={statusFilter}
-            onStatusChange={setStatusFilter}
-            statusOptions={statusOptions}
-            type={typeFilter}
-            onTypeChange={setTypeFilter}
-            typeOptions={typeOptions}
-            typeLabel="Request type"
-            loading={loading}
-            onBusyChange={setFilterBusy}
-          />
-        </div>
-
-        {error ? (
-          <div className="px-4 py-3 md:px-5">
-            <FlashBanner message={error} tone="danger" autoDismiss={false} />
-          </div>
-        ) : null}
-
-        {loading || filterBusy ? (
-          <div className="p-4 md:p-5">
-            <PageLoader
-              compact
-              label={loading ? "Loading requests" : "Updating results"}
-              hint={
-                loading
-                  ? "Pulling leave, encashment, and attendance change…"
-                  : "Applying your search and filters…"
-              }
+      <TablePanel
+        title="Request Logs"
+        tabs={statusTabs}
+        tab={statusFilter}
+        onTabChange={setStatusFilter}
+        recordCount={filtered.length}
+        search={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search summary, type, reason…"
+        filterActive={activeFilterCount > 0}
+        activeFilterCount={activeFilterCount}
+        drawerFields={
+          <>
+            <FilterDate
+              label="From date"
+              value={draftDateFrom}
+              onChange={setDraftDateFrom}
+              max={draftDateTo || undefined}
+              clearable
             />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex min-h-[200px] flex-col items-center justify-center px-6 py-12 text-center">
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--lavender-soft)] text-[var(--violet)]">
-              <Inbox className="h-6 w-6" />
-            </span>
-            <p className="mt-3 text-[14px] font-semibold text-[var(--text)]">
-              No requests match
-            </p>
-            <p className="mt-1 max-w-sm text-[12px] text-[var(--muted)]">
-              Try another filter, or start a new request from a module above.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-[13px]">
-              <thead>
-                <tr className="border-b border-[var(--border)] bg-[var(--panel-soft)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
-                  <th className="w-12 px-4 py-2.5 font-semibold md:px-5">#</th>
-                  <th className="px-4 py-2.5 font-semibold">Type</th>
-                  <th className="px-4 py-2.5 font-semibold">Summary</th>
-                  <th className="px-4 py-2.5 font-semibold">Period</th>
-                  <th className="px-4 py-2.5 font-semibold">Submitted</th>
-                  <th className="px-4 py-2.5 font-semibold">Status</th>
-                  <th className="px-4 py-2.5 font-semibold md:px-5"> </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row, index) => (
-                  <tr
-                    key={row.id}
-                    className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-soft)]/50"
-                  >
-                    <td className="whitespace-nowrap px-4 py-3 tabular-nums text-[var(--muted)] md:px-5">
-                      {rowSerial(index)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-semibold text-[var(--text)]">
-                      {row.typeLabel.replace(" Request", "")}
-                    </td>
-                    <td className="max-w-[220px] px-4 py-3 text-[var(--text)]">
-                      <p className="truncate">{row.summary}</p>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-[var(--muted)]">
-                      {row.period}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-[var(--muted)]">
-                      {row.createdAt
-                        ? formatDateTime(row.createdAt)
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold capitalize ${statusTone(row.status)}`}
-                      >
-                        {row.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 md:px-5">
-                      <Link
-                        href={row.href}
-                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 text-[12px] font-semibold text-[var(--violet)] transition hover:bg-[var(--lavender-soft)]"
-                      >
-                        Open
-                        <ArrowUpRight className="h-3.5 w-3.5" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </div>
+            <FilterDate
+              label="To date"
+              value={draftDateTo}
+              onChange={setDraftDateTo}
+              min={draftDateFrom || undefined}
+              clearable
+            />
+            <FilterSelect
+              label="Request type"
+              value={draftTypeFilter}
+              onChange={setDraftTypeFilter}
+              options={typeOptions}
+              clearable
+              defaultValue="all"
+            />
+          </>
+        }
+        onApplyFilters={() => {
+          setDateFrom(draftDateFrom);
+          setDateTo(draftDateTo);
+          setTypeFilter(draftTypeFilter);
+          setPage(1);
+        }}
+        onResetFilters={() => {
+          setDraftDateFrom("");
+          setDraftDateTo("");
+          setDateFrom("");
+          setDateTo("");
+          setDraftTypeFilter("all");
+          setTypeFilter("all");
+          setPage(1);
+        }}
+        onRefresh={refetch}
+        columns={columns}
+        rows={pagedRows}
+        getRowKey={(row) => row.id}
+        minWidth="960px"
+        loading={loading}
+        loadingLabel="Loading requests"
+        loadingHint="Pulling leave, encashment, and attendance change…"
+        error={error}
+        emptyIcon={Inbox}
+        emptyTitle="No requests match"
+        emptyHint="Try another filter, or start a new request from a module above."
+        page={currentPage}
+        pageSize={limit}
+        total={filtered.length}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        onPageSizeChange={(n) => {
+          setLimit(n);
+          setPage(1);
+        }}
+      />
+    </PortalPage>
   );
 }

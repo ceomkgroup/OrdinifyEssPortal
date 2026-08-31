@@ -47,7 +47,7 @@ export function ProfileCard({ employee, dateFormat }) {
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-[family-name:var(--font-heading)] text-[18px] font-semibold leading-tight text-[var(--text)] sm:text-[20px]">
+            <h2 className="heading-section">
               {name}
             </h2>
             <Badge variant="success" className="rounded-full px-2.5">

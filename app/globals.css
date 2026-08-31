@@ -104,7 +104,7 @@ button,
 input,
 textarea,
 select {
-  font: inherit;
+  font-family: inherit;
 }
 
 /* Do not set color:inherit on buttons — it overrides Tailwind text-* utilities
@@ -207,4 +207,42 @@ a {
 
 .logo-loader-glow {
   animation: logo-pulse-soft 2.2s ease-in-out infinite;
+}
+
+/* Heading scale — tuned for 13–14" laptop screens */
+.heading-page {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--text);
+}
+
+.heading-section {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.heading-card {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.heading-sub {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+@media (min-width: 1280px) {
+  .heading-page {
+    font-size: 1.25rem;
+  }
 }

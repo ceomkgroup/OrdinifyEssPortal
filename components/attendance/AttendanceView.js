@@ -4,63 +4,64 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
+  ArrowRight,
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Clock3,
-  Coffee,
-  Download,
   FilePenLine,
-  LogIn,
-  LogOut,
-  MapPin,
+  Monitor,
   MoreVertical,
-  RefreshCw,
-  Timer,
+  Pencil,
 } from "lucide-react";
 import { getAttendanceHistoryAll } from "@/api/attendance";
 import { AttendanceTypeBadge } from "@/components/attendance/AttendanceTypeBadge";
-import { AttendancePolicyCard } from "@/components/attendance/AttendancePolicyCard";
-import { Badge } from "@/components/ui/Badge";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { useModules } from "@/components/modules/ModulesProvider";
+import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { FlashBanner } from "@/components/ui/FlashBanner";
-import { ListFiltersBar } from "@/components/ui/ListFilters";
-import { PageLoader, LogoLoader } from "@/components/ui/Spinner";
+import { AttendanceStatusFilter } from "@/components/attendance/AttendanceStatusFilter";
+import { MuiDateRangeFields } from "@/components/ui/MuiDateField";
+import { MetaBadge } from "@/components/ui/MetaBadge";
+import { PageLoader } from "@/components/ui/Spinner";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { PortalPage } from "@/components/ui/PortalPage";
+import { TablePanel } from "@/components/ui/TablePanel";
 import { useAttendancePage } from "@/hooks/useAttendance";
 import { useAttendanceTypes } from "@/hooks/useAttendanceTypes";
-import { useModules } from "@/components/modules/ModulesProvider";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import {
+  readQueryString,
+  usePortalQuery,
+} from "@/hooks/usePortalQuery";
 import {
   attendanceRowsToCsv,
   downloadCsv,
   filterAttendanceByStatus,
   getAttendanceTypeColor,
-  monthRange,
 } from "@/lib/attendance-history";
 import {
   formatDate,
   formatHoursMinutes,
   formatMonthYear,
   formatTime,
-  rowSerial,
+  getDisplayName,
 } from "@/lib/format";
 
-const MONTH_OPTIONS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
+const RANGE_TABS = [
+  { key: "week", label: "This Week" },
+  { key: "month", label: "This Month" },
+  { key: "lastMonth", label: "Last Month" },
+  { key: "year", label: "This Year" },
 ];
 
-function Stat({ label, value, tone = "text-[var(--text)]", hint, color }) {
+function pickNumber(...values) {
+  for (const value of values) {
+    if (value == null || value === "") continue;
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function SoftStat({ label, value, color }) {
   return (
     <div
       className="rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-3"
@@ -77,31 +78,51 @@ function Stat({ label, value, tone = "text-[var(--text)]", hint, color }) {
         {label}
       </p>
       <p
-        className={`mt-1 truncate text-[16px] font-bold tabular-nums leading-tight ${color ? "" : tone}`}
+        className="mt-1 truncate text-[16px] font-bold tabular-nums leading-tight text-[var(--text)]"
         style={color ? { color } : undefined}
         title={value != null ? String(value) : undefined}
       >
         {value ?? "—"}
       </p>
-      {hint ? (
-        <p className="mt-1 text-[10px] text-[var(--muted)]">{hint}</p>
-      ) : null}
     </div>
   );
 }
 
-function shiftPeriod(year, month, delta) {
-  const d = new Date(year, month - 1 + delta, 1);
-  return { year: d.getFullYear(), month: d.getMonth() + 1 };
+function DateRangeBadge({ from, to, dateFormat = "DD/MM/YYYY", className = "" }) {
+  if (!from && !to) return null;
+  return (
+    <MetaBadge className={className}>
+      <span>{formatDate(from, dateFormat)}</span>
+      <ArrowRight className="h-3 w-3 shrink-0 opacity-60" strokeWidth={2.2} />
+      <span>{formatDate(to, dateFormat)}</span>
+    </MetaBadge>
+  );
 }
 
-function pickNumber(...values) {
-  for (const value of values) {
-    if (value == null || value === "") continue;
-    const n = Number(value);
-    if (Number.isFinite(n)) return n;
+function SourcePill({ source }) {
+  const raw = String(source || "").trim();
+  if (!raw) return <span className="text-[var(--muted)]">—</span>;
+  const lower = raw.toLowerCase();
+  const isManual =
+    lower.includes("manual") || lower === "admin" || lower === "hr";
+  const Icon = isManual ? Pencil : Monitor;
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold capitalize text-[var(--text)]">
+      <Icon className="h-3 w-3 text-[var(--muted)]" />
+      {raw}
+    </span>
+  );
+}
+
+function HoursPill({ value }) {
+  if (value == null || value === "") {
+    return <span className="text-[var(--muted)]">—</span>;
   }
-  return null;
+  return (
+    <span className="inline-flex rounded-full bg-[var(--lavender-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--violet)]">
+      {formatHoursMinutes(value)}
+    </span>
+  );
 }
 
 function HistoryRowActions({ logId }) {
@@ -120,10 +141,7 @@ function HistoryRowActions({ logId }) {
         Math.max(8, rect.right - menuWidth),
         window.innerWidth - menuWidth - 8
       );
-      setCoords({
-        top: rect.bottom + 6,
-        left,
-      });
+      setCoords({ top: rect.bottom + 6, left });
     }
 
     placeMenu();
@@ -152,43 +170,33 @@ function HistoryRowActions({ logId }) {
     };
   }, [open, logId]);
 
+  if (!logId) return null;
+
   return (
     <>
       <button
         ref={buttonRef}
         type="button"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
         aria-label="Row actions"
-        aria-expanded={open}
-        onClick={(event) => {
-          event.stopPropagation();
-          setOpen((v) => !v);
-        }}
+        onClick={() => setOpen((v) => !v)}
       >
         <MoreVertical className="h-4 w-4" />
       </button>
-
       {open && typeof document !== "undefined"
         ? createPortal(
             <div
               data-history-menu={logId}
-              className="fixed z-[9999] w-56 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
+              className="fixed z-[90] w-56 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_12px_32px_rgba(15,23,42,0.14)]"
               style={{ top: coords.top, left: coords.left }}
             >
               <Link
-                href={`/requests/attendance-change?logId=${encodeURIComponent(logId || "")}`}
-                className="flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-[var(--panel-soft)]"
+                href={`/requests/attendance-change?logId=${encodeURIComponent(logId)}`}
+                className="flex items-center gap-2.5 px-3 py-2.5 text-[13px] font-semibold text-[var(--text)] hover:bg-[var(--panel-soft)]"
                 onClick={() => setOpen(false)}
               >
-                <FilePenLine className="mt-0.5 h-4 w-4 shrink-0 text-[var(--violet)]" />
-                <span>
-                  <span className="block text-[13px] font-semibold text-[var(--text)]">
-                    Request correction
-                  </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-[var(--muted)]">
-                    Fix check-in / check-out for this day
-                  </span>
-                </span>
+                <FilePenLine className="h-4 w-4 text-[var(--violet)]" />
+                Request change
               </Link>
             </div>,
             document.body
@@ -198,25 +206,56 @@ function HistoryRowActions({ logId }) {
   );
 }
 
+function breakTimes(row) {
+  const logs = row?.breaks || row?.breakLogs || row?.breakHistory || [];
+  const last = Array.isArray(logs) && logs.length ? logs[logs.length - 1] : null;
+  return {
+    breakOut:
+      row?.breakOutTime ||
+      row?.lastBreakOutTime ||
+      last?.breakOutTime ||
+      last?.outTime ||
+      null,
+    breakIn:
+      row?.breakInTime ||
+      row?.lastBreakInTime ||
+      last?.breakInTime ||
+      last?.inTime ||
+      null,
+    minutes: pickNumber(row?.breakMinutes, row?.totalBreakMinutes, last?.minutes),
+  };
+}
+
 export function AttendanceView() {
+  const { employee } = useAuth();
+  const { settings } = useCompanySettings();
   const { hasFlag, hasScreen } = useModules();
   const breakEnabled = hasFlag("breakManagement");
   const canRequestChange = hasScreen("attendanceChange");
+
+  const dateFormat = settings.dateFormat || "DD/MM/YYYY";
+  const timeFormat = settings.timeFormat || "12h";
+  const displayName = getDisplayName(employee) || "Employee";
+  const empCode =
+    employee?.employeeCode || employee?.empCode || employee?.code || "";
+
   const {
-    year,
-    month,
+    rangePreset,
+    range,
+    customFrom,
+    customTo,
+    setPreset,
+    setCustomRange,
     page,
     limit,
     setPage,
     setPageSize,
-    setPeriod,
-    today,
-    todayMessage,
-    summary,
     history,
     meta,
-    geofence,
-    geofenceEnabled,
+    summary,
+    summaryYear,
+    summaryMonth,
+    summaryLoading,
     loading,
     historyLoading,
     error,
@@ -226,27 +265,91 @@ export function AttendanceView() {
   const { types: attendanceTypes, filterOptions: statusFilterOptions } =
     useAttendanceTypes();
 
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [historyQuery, setHistoryQuery] = useState("");
-  const [filterBusy, setFilterBusy] = useState(false);
+  const { searchParams, replaceQuery } = usePortalQuery();
+
+  const [statusFilter, setStatusFilter] = useState(() =>
+    readQueryString(searchParams, "status", "all")
+  );
+  const [historyQuery, setHistoryQuery] = useState(() =>
+    readQueryString(searchParams, "q", "")
+  );
+  const [draftStatus, setDraftStatus] = useState(() =>
+    readQueryString(searchParams, "status", "all")
+  );
+  const [draftFrom, setDraftFrom] = useState("");
+  const [draftTo, setDraftTo] = useState("");
+  const [logsCollapsed, setLogsCollapsed] = useState(false);
+  const [summaryCollapsed, setSummaryCollapsed] = useState(true);
   const [monthRows, setMonthRows] = useState([]);
   const [monthRowsLoading, setMonthRowsLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [filterError, setFilterError] = useState("");
 
-  const showGeofence = geofenceEnabled && Boolean(geofence);
-  const filterActive = statusFilter !== "all";
+  const searchActive = Boolean(historyQuery.trim());
+  const statusActive = statusFilter !== "all";
+  /** Status or search need full-range rows (not server page only). */
+  const clientFilterActive = statusActive || searchActive;
+  const activeFilterCount =
+    (statusActive ? 1 : 0) + (rangePreset === "custom" ? 1 : 0);
+
+  const queryDefaults = {
+    range: "month",
+    from: "",
+    to: "",
+    page: "1",
+    limit: "10",
+    status: "all",
+    q: "",
+  };
+
+  // Persist list state in the URL (survives reload / hard refresh).
+  useEffect(() => {
+    replaceQuery(
+      {
+        range: rangePreset,
+        from: rangePreset === "custom" ? customFrom : "",
+        to: rangePreset === "custom" ? customTo : "",
+        page,
+        limit,
+        status: statusFilter,
+        q: historyQuery,
+      },
+      queryDefaults
+    );
+  }, [
+    rangePreset,
+    customFrom,
+    customTo,
+    page,
+    limit,
+    statusFilter,
+    historyQuery,
+    replaceQuery,
+  ]);
+
+  // Keep drawer drafts aligned with applied filters (ListToolbar has no onOpen sync).
+  useEffect(() => {
+    setDraftStatus(statusFilter);
+    setDraftFrom(customFrom || range.from);
+    setDraftTo(customTo || range.to);
+  }, [statusFilter, customFrom, customTo, range.from, range.to]);
 
   useEffect(() => {
     let alive = true;
 
-    if (!filterActive) {
+    if (!clientFilterActive) {
       queueMicrotask(() => {
         if (!alive) return;
         setMonthRows([]);
         setMonthRowsLoading(false);
         setFilterError("");
       });
+      return () => {
+        alive = false;
+      };
+    }
+
+    if (rangePreset === "custom" && (!customFrom || !customTo)) {
       return () => {
         alive = false;
       };
@@ -261,8 +364,10 @@ export function AttendanceView() {
 
     (async () => {
       try {
-        const { from, to } = monthRange(year, month);
-        const rows = await getAttendanceHistoryAll({ from, to });
+        const rows = await getAttendanceHistoryAll({
+          from: range.from,
+          to: range.to,
+        });
         if (!alive) return;
         setMonthRows(rows);
       } catch (err) {
@@ -277,25 +382,36 @@ export function AttendanceView() {
     return () => {
       alive = false;
     };
-  }, [filterActive, year, month]);
+  }, [
+    clientFilterActive,
+    range.from,
+    range.to,
+    rangePreset,
+    customFrom,
+    customTo,
+  ]);
 
-  const filteredMonthRows = useMemo(
-    () => filterAttendanceByStatus(monthRows, statusFilter, attendanceTypes),
-    [monthRows, statusFilter, attendanceTypes]
-  );
-
-  const displayRows = useMemo(() => {
-    const base = filterActive
-      ? filteredMonthRows.slice((page - 1) * limit, page * limit)
-      : history;
+  const filteredRows = useMemo(() => {
+    let rows = clientFilterActive ? monthRows : history;
+    if (statusActive) {
+      rows = filterAttendanceByStatus(rows, statusFilter, attendanceTypes);
+    }
     const q = historyQuery.trim().toLowerCase();
-    if (!q) return base || [];
-    return (base || []).filter((row) => {
+    if (!q) return rows || [];
+    return (rows || []).filter((row) => {
       const hay = [
         row.attendanceDate,
+        formatDate(row.attendanceDate, dateFormat),
         row.attTypeName,
+        row.attTypeCode,
         row.statusLabel,
         row.shiftName,
+        row.punchSource,
+        row.isManualOverride ? "Manual" : "",
+        row.checkInTime,
+        row.checkOutTime,
+        formatTime(row.checkInTime, timeFormat),
+        formatTime(row.checkOutTime, timeFormat),
         row.remarks,
       ]
         .filter(Boolean)
@@ -304,52 +420,63 @@ export function AttendanceView() {
       return hay.includes(q);
     });
   }, [
-    filterActive,
-    filteredMonthRows,
-    page,
-    limit,
+    clientFilterActive,
+    monthRows,
     history,
+    statusActive,
+    statusFilter,
+    attendanceTypes,
     historyQuery,
+    dateFormat,
+    timeFormat,
   ]);
 
-  const total = filterActive
-    ? filteredMonthRows.length
+  const displayRows = useMemo(() => {
+    if (!clientFilterActive) return history || [];
+    return filteredRows.slice((page - 1) * limit, page * limit);
+  }, [clientFilterActive, filteredRows, history, page, limit]);
+
+  const total = clientFilterActive
+    ? filteredRows.length
     : Number(meta?.total) || 0;
-  const currentPage = filterActive ? page : Number(meta?.page) || page;
-  const pageLimit = Number(meta?.limit) || limit;
-  const totalPages = filterActive
+  const currentPage = clientFilterActive ? page : Number(meta?.page) || page;
+  const pageLimit = clientFilterActive
+    ? limit
+    : Number(meta?.limit) || limit;
+  const totalPages = clientFilterActive
     ? Math.max(1, Math.ceil(total / pageLimit) || 1)
     : Math.max(1, Number(meta?.totalPages) || 1);
-  const fromRow = total === 0 ? 0 : (currentPage - 1) * pageLimit + 1;
-  const toRow = Math.min(currentPage * pageLimit, total);
-  const listLoading = historyLoading || (filterActive && monthRowsLoading);
+  const listLoading = historyLoading || (clientFilterActive && monthRowsLoading);
 
-  const todayWorkingHours = pickNumber(
-    today?.workingHours,
-    today?.workedHours,
-    today?.totalWorkingHours
-  );
-  const todayBreakMinutes = pickNumber(
-    today?.breakMinutes,
-    today?.totalBreakMinutes,
-    today?.usedBreakMinutes
-  );
-  const todayBreaksUsed = pickNumber(
-    today?.breaksUsed,
-    today?.breakCount,
-    today?.completedBreakCount
-  );
-  const todayMaxBreaks = pickNumber(
-    today?.maxBreaks,
-    today?.allowedBreaks,
-    today?.maxBreakCount
-  );
+  useEffect(() => {
+    if (clientFilterActive && page > totalPages) {
+      setPage(1);
+    }
+  }, [clientFilterActive, page, totalPages, setPage]);
 
-  const historyColSpan =
-    9 + (breakEnabled ? 1 : 0) + (canRequestChange ? 1 : 0) + 2;
+  function applyFilters() {
+    setStatusFilter(draftStatus);
+    setPage(1);
+    if (
+      rangePreset === "custom" ||
+      draftFrom !== range.from ||
+      draftTo !== range.to
+    ) {
+      setCustomRange(draftFrom, draftTo);
+    }
+  }
 
-  function onStatusFilterChange(next) {
-    setStatusFilter(next);
+  function resetFilters() {
+    setDraftStatus("all");
+    setStatusFilter("all");
+    setPage(1);
+    if (rangePreset === "custom") {
+      setPreset("month");
+    }
+  }
+
+  function onSearchChange(next) {
+    setHistoryQuery(next);
     setPage(1);
   }
 
@@ -357,18 +484,18 @@ export function AttendanceView() {
     setExporting(true);
     setFilterError("");
     try {
-      const { from, to } = monthRange(year, month);
-      const rows = await getAttendanceHistoryAll({ from, to });
+      const rows = await getAttendanceHistoryAll({
+        from: range.from,
+        to: range.to,
+      });
       const filtered = filterAttendanceByStatus(
         rows,
         statusFilter,
         attendanceTypes
       );
       const csv = attendanceRowsToCsv(filtered, { includeBreak: breakEnabled });
-      const filterPart =
-        statusFilter === "all" ? "all" : statusFilter.toLowerCase();
       downloadCsv(
-        `attendance-${year}-${String(month).padStart(2, "0")}-${filterPart}.csv`,
+        `attendance-${range.from}_${range.to}.csv`,
         csv
       );
     } catch (err) {
@@ -376,592 +503,350 @@ export function AttendanceView() {
     } finally {
       setExporting(false);
     }
-  }, [year, month, statusFilter, breakEnabled, attendanceTypes]);
+  }, [range.from, range.to, statusFilter, breakEnabled, attendanceTypes]);
 
-  if (loading && !summary && !today) {
+  const columns = useMemo(() => {
+    const cols = [
+      {
+        id: "employee",
+        header: "Employee",
+        headerClassName: "px-3",
+        cellClassName: "px-3",
+        cell: () => (
+          <div className="flex items-center gap-2">
+            <Avatar person={employee} name={displayName} size={28} />
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-[12px] font-semibold text-[var(--text)]">
+                {displayName}
+              </p>
+              {empCode ? (
+                <p className="text-[10px] text-[var(--muted)]">#{empCode}</p>
+              ) : null}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "date",
+        header: "Date",
+        cellClassName: "whitespace-nowrap font-medium text-[var(--text)]",
+        cell: (row) => formatDate(row.attendanceDate, dateFormat),
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (row) => (
+          <AttendanceTypeBadge row={row} types={attendanceTypes} />
+        ),
+      },
+      {
+        id: "source",
+        header: "Source",
+        cell: (row) => (
+          <SourcePill
+            source={
+              row.punchSource || (row.isManualOverride ? "Manual" : null)
+            }
+          />
+        ),
+      },
+      {
+        id: "shift",
+        header: "Shift",
+        cellClassName: "max-w-[140px] truncate text-[var(--muted)]",
+        cell: (row) => (
+          <span title={row.shiftName || ""}>{row.shiftName || "—"}</span>
+        ),
+      },
+      {
+        id: "checkIn",
+        header: "Check In",
+        cellClassName: "whitespace-nowrap font-semibold text-[var(--success)]",
+        cell: (row) => formatTime(row.checkInTime, timeFormat),
+      },
+      {
+        id: "checkOut",
+        header: "Check Out",
+        cellClassName: "whitespace-nowrap font-semibold text-[var(--violet)]",
+        cell: (row) => formatTime(row.checkOutTime, timeFormat),
+      },
+      {
+        id: "hours",
+        header: "Hours",
+        cell: (row) => <HoursPill value={row.workingHours} />,
+      },
+      {
+        id: "late",
+        header: "Late",
+        cellClassName: (row) => {
+          const late = Number(row.lateMinutes) || 0;
+          return `whitespace-nowrap tabular-nums ${
+            late > 0
+              ? "font-semibold text-[var(--warning)]"
+              : "text-[var(--muted)]"
+          }`;
+        },
+        cell: (row) => {
+          const late = Number(row.lateMinutes) || 0;
+          if (late <= 0) return "—";
+          return late < 60
+            ? `${late}m`
+            : `${Math.floor(late / 60)}h ${late % 60}m`;
+        },
+      },
+      {
+        id: "break",
+        header: "Break",
+        cellClassName: "whitespace-nowrap",
+        cell: (row) => {
+          const breakMins = breakTimes(row).minutes;
+          if (breakMins != null && breakMins > 0) {
+            return (
+              <span className="text-[12px] font-medium text-[var(--text)]">
+                {Math.round(breakMins)} min
+              </span>
+            );
+          }
+          return (
+            <span className="text-[12px] font-medium text-[var(--info)]">
+              No break
+            </span>
+          );
+        },
+      },
+    ];
+
+    if (breakEnabled) {
+      cols.push(
+        {
+          id: "breakOut",
+          header: "Break Out",
+          cellClassName: "whitespace-nowrap text-[var(--muted)]",
+          cell: (row) => formatTime(breakTimes(row).breakOut, timeFormat),
+        },
+        {
+          id: "breakIn",
+          header: "Break In",
+          cellClassName: "whitespace-nowrap text-[var(--muted)]",
+          cell: (row) => formatTime(breakTimes(row).breakIn, timeFormat),
+        },
+        {
+          id: "breakMin",
+          header: "Break Min",
+          cellClassName: "whitespace-nowrap text-[var(--muted)]",
+          cell: (row) => {
+            const breakMins = breakTimes(row).minutes;
+            return breakMins != null ? `${Math.round(breakMins)}` : "—";
+          },
+        }
+      );
+    }
+
+    if (canRequestChange) {
+      cols.push({
+        id: "action",
+        header: "Action",
+        cell: (row) => <HistoryRowActions logId={row.logId} />,
+      });
+    }
+
+    return cols;
+  }, [
+    employee,
+    displayName,
+    empCode,
+    dateFormat,
+    timeFormat,
+    attendanceTypes,
+    breakEnabled,
+    canRequestChange,
+  ]);
+
+  if (loading && historyLoading && !history.length) {
     return (
-      <PageLoader label="Loading attendance" hint="Fetching today’s status and month summary…" />
+      <PageLoader
+        label="Loading attendance"
+        hint="Fetching attendance logs…"
+      />
     );
   }
 
   return (
-    <div className="flex w-full flex-col gap-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-[family-name:var(--font-heading)] text-2xl font-semibold text-[var(--text)] md:text-[28px]">
-            Attendance
-          </h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Today&apos;s status, monthly summary, and attendance history.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--panel-soft)]"
-            onClick={() => {
-              const next = shiftPeriod(year, month, -1);
-              setPeriod(next.year, next.month);
-            }}
-            aria-label="Previous month"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <select
-            value={month}
-            onChange={(e) => setPeriod(year, Number(e.target.value))}
-            className="h-10 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--text)]"
-          >
-            {MONTH_OPTIONS.map((label, idx) => (
-              <option key={label} value={idx + 1}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={year}
-            onChange={(e) => setPeriod(Number(e.target.value), month)}
-            className="h-10 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--text)]"
-          >
-            {[year - 1, year, year + 1].map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--panel-soft)]"
-            onClick={() => {
-              const next = shiftPeriod(year, month, 1);
-              setPeriod(next.year, next.month);
-            }}
-            aria-label="Next month"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+    <PortalPage
+      fill
+      title="Attendance"
+      subtitle="Your monthly summary and attendance logs"
+      error={error}
+      actions={
+        <>
+          <DateRangeBadge
+            from={range.from}
+            to={range.to}
+            dateFormat={dateFormat}
+          />
           <Button
             type="button"
             variant="outline"
             className="h-10 rounded-xl"
             onClick={refetch}
+            disabled={historyLoading || summaryLoading}
           >
-            <RefreshCw className="h-4 w-4" />
             Refresh
           </Button>
-        </div>
-      </div>
-
-      {error ? (
-        <FlashBanner
-          message={error}
-          tone="danger"
-          duration={5000}
-          autoDismiss={false}
-        />
-      ) : null}
-
-      <div
-        className={`grid gap-4 ${
-          showGeofence ? "xl:grid-cols-[1.35fr_0.9fr]" : ""
-        }`}
+        </>
+      }
+    >
+      <CollapsibleSection
+        title={`Monthly Summary (${formatMonthYear(summaryYear, summaryMonth)})`}
+        defaultCollapsed
+        collapsed={summaryCollapsed}
+        onCollapsedChange={setSummaryCollapsed}
       >
-        <Card title="Today" bodyClassName="space-y-3">
-          {!today ? (
-            <div className="flex min-h-[150px] flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] text-center">
-              <Clock3 className="h-10 w-10 text-[var(--muted)]" strokeWidth={1.4} />
-              <p className="mt-3 text-[14px] font-semibold text-[var(--text)]">
-                Not checked in today
-              </p>
-              <p className="mt-1 max-w-sm text-[12px] text-[var(--muted)]">
-                {todayMessage || "Punch in when your shift starts."}
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="flex flex-wrap items-center gap-2">
-                <AttendanceTypeBadge
-                  row={today}
-                  types={attendanceTypes}
-                  fallback={
-                    today.isCheckedIn ? "Checked In" : "Present"
-                  }
-                />
-                {today.isCheckedOut ? (
-                  <span className="rounded-full bg-[var(--lavender-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--violet)]">
-                    Checked Out
-                  </span>
-                ) : today.isCheckedIn ? (
-                  <span className="rounded-full bg-[var(--info-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--info)]">
-                    Checked In
-                  </span>
-                ) : null}
-                {breakEnabled && today.isOnBreak ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--warning)]">
-                    <Coffee className="h-3.5 w-3.5" />
-                    On Break
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                <Stat
-                  label="Shift"
-                  value={today.shiftName || "—"}
-                  tone="text-[var(--violet)]"
-                />
-                <Stat
-                  label="Check In"
-                  value={formatTime(today.checkInTime)}
-                  hint={today.isCheckedIn && !today.isCheckedOut ? "Active" : null}
-                />
-                <Stat
-                  label="Check Out"
-                  value={formatTime(today.checkOutTime)}
-                  hint={today.isCheckedOut ? "Completed" : "Pending"}
-                />
-                <Stat
-                  label="Late Minutes"
-                  value={today.lateMinutes ?? 0}
-                  tone={
-                    Number(today.lateMinutes) > 0
-                      ? "text-[var(--warning)]"
-                      : "text-[var(--success)]"
-                  }
-                />
-                {todayWorkingHours != null ? (
-                  <Stat
-                    label="Working Hours"
-                    value={formatHoursMinutes(todayWorkingHours)}
-                  />
-                ) : null}
-                {breakEnabled ? (
-                  <Stat
-                    label="On Break"
-                    value={today.isOnBreak ? "Yes" : "No"}
-                  />
-                ) : null}
-                {breakEnabled && todayBreakMinutes != null ? (
-                  <Stat label="Break Minutes" value={todayBreakMinutes} />
-                ) : null}
-                {breakEnabled && todayMaxBreaks != null ? (
-                  <Stat
-                    label="Breaks Used"
-                    value={`${todayBreaksUsed ?? 0}/${todayMaxBreaks}`}
-                  />
-                ) : null}
-              </div>
-            </>
-          )}
-        </Card>
-
-        {showGeofence ? (
-          <Card title="Geofence">
-            <div className="space-y-3 text-[13px]">
-              <div className="flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--violet)]" />
-                <div className="min-w-0">
-                  <p className="font-semibold text-[var(--text)]">
-                    {geofence.geofence?.name || "Location"}
-                  </p>
-                  <p className="mt-0.5 text-[12px] text-[var(--muted)]">
-                    {geofence.geofence?.address || "—"}
-                  </p>
-                  {geofence.geofence?.type ? (
-                    <p className="mt-1 text-[11px] capitalize text-[var(--muted)]">
-                      Type · {geofence.geofence.type}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Stat
-                  label="Radius"
-                  value={`${geofence.geofence?.radiusMeters ?? "—"} m`}
-                />
-                <Stat
-                  label="GPS Required"
-                  value={geofence.requireGpsForPunch ? "Yes" : "No"}
-                />
-                <Stat
-                  label="GPS Allowed"
-                  value={geofence.gpsAllowed ? "Yes" : "No"}
-                />
-                <Stat
-                  label="Reject Mock GPS"
-                  value={geofence.rejectMockGps ? "Yes" : "No"}
-                />
-              </div>
-            </div>
-          </Card>
-        ) : null}
-      </div>
-
-      <AttendancePolicyCard />
-
-      <Card
-        title={`Monthly Summary (${formatMonthYear(year, month)})`}
-        action={
-          <span className="inline-flex items-center gap-1 text-[11px] text-[var(--muted)]">
-            <CalendarDays className="h-3.5 w-3.5" />
-            Selected period
-          </span>
-        }
-      >
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
-          <Stat label="Total Days" value={summary?.totalDays ?? 0} />
-          <Stat
-            label="Present"
-            value={summary?.presentCount ?? summary?.present ?? 0}
-            color={getAttendanceTypeColor("P", attendanceTypes, "#22c55e")}
-          />
-          {summary?.absentCount != null || summary?.absent != null ? (
-            <Stat
-              label="Absent"
-              value={summary?.absentCount ?? summary?.absent}
-              color={getAttendanceTypeColor("A", attendanceTypes, "#ef4444")}
-            />
-          ) : null}
-          {summary?.leaveCount != null || summary?.leave != null ? (
-            <Stat
-              label="Leave"
-              value={summary?.leaveCount ?? summary?.leave}
-              color={getAttendanceTypeColor("CL", attendanceTypes, "#7b39ec")}
-            />
-          ) : null}
-          {summary?.holidayCount != null || summary?.holiday != null ? (
-            <Stat
-              label="Holiday"
-              value={summary?.holidayCount ?? summary?.holiday}
-              color={getAttendanceTypeColor("H", attendanceTypes, "#a0dab5")}
-            />
-          ) : null}
-          {summary?.halfDayCount != null || summary?.halfDay != null ? (
-            <Stat
-              label="Half Day"
-              value={summary?.halfDayCount ?? summary?.halfDay}
-              color={getAttendanceTypeColor("HD", attendanceTypes, "#f97316")}
-            />
-          ) : null}
-          <Stat
-            label="Late Days"
-            value={summary?.lateCount ?? 0}
-            color={getAttendanceTypeColor("LP", attendanceTypes, "#f59e0b")}
-          />
-          <Stat
-            label="Late Minutes"
-            value={summary?.totalLateMinutes ?? 0}
-          />
-          <Stat
-            label="Working Hours"
-            value={formatHoursMinutes(summary?.totalWorkingHours)}
-          />
-          <Stat
-            label="Overtime Hours"
-            value={formatHoursMinutes(summary?.totalOvertimeHours)}
-          />
-          {breakEnabled ? (
-            <Stat
-              label="Break Minutes"
-              value={summary?.totalBreakMinutes ?? 0}
-            />
-          ) : null}
-          <Stat label="Grace Used" value={summary?.graceUsedMinutes ?? 0} />
-        </div>
-      </Card>
-
-      <Card
-        title="Attendance History"
-        action={
-          listLoading ? (
-            <span className="text-[12px] text-[var(--muted)]">Loading…</span>
-          ) : (
-            <span className="text-[12px] text-[var(--muted)]">
-              {total} total · page {currentPage}/{totalPages}
-            </span>
-          )
-        }
-      >
-        <div className="mb-3 flex flex-col gap-3">
-          <ListFiltersBar
-            search={historyQuery}
-            onSearchChange={setHistoryQuery}
-            searchPlaceholder="Search date, status, shift…"
-            status={statusFilter}
-            onStatusChange={onStatusFilterChange}
-            statusOptions={statusFilterOptions}
-            loading={listLoading}
-            onBusyChange={setFilterBusy}
-          />
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 rounded-xl"
-              disabled={exporting || listLoading || filterBusy}
-              onClick={handleExportCsv}
-            >
-              <Download className="h-4 w-4" />
-              {exporting ? "Exporting…" : "Export CSV"}
-            </Button>
-          </div>
-        </div>
-
-        {filterError ? (
-          <p className="mb-3 rounded-lg bg-[var(--danger-soft)] px-3 py-2 text-[12px] text-[var(--danger)]">
-            {filterError}
-          </p>
-        ) : null}
-
-        {filterActive ? (
-          <p className="mb-3 text-[11px] text-[var(--muted)]">
-            Showing{" "}
-            {statusFilterOptions.find((o) => o.value === statusFilter)
-              ?.label || statusFilter}{" "}
-            for {formatMonthYear(year, month)}
-            {monthRowsLoading ? " · loading month…" : ""}.
-          </p>
-        ) : null}
-
-        {listLoading || filterBusy ? (
-          <PageLoader
-            compact
-            label={listLoading ? "Loading attendance" : "Updating results"}
-            hint={
-              listLoading
-                ? "Fetching attendance logs…"
-                : "Applying your search and filters…"
-            }
-          />
+        {summaryLoading && !summary ? (
+          <p className="text-sm text-[var(--muted)]">Loading summary…</p>
         ) : (
-        <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-          <table className="min-w-full text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-[var(--border)] bg-[var(--panel-soft)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
-                <th className="w-12 px-3 py-2.5 font-semibold">#</th>
-                <th className="px-3 py-2.5 font-semibold">Date</th>
-                <th className="px-3 py-2.5 font-semibold">Status</th>
-                <th className="px-3 py-2.5 font-semibold">Check In</th>
-                <th className="px-3 py-2.5 font-semibold">Check Out</th>
-                <th className="px-3 py-2.5 font-semibold">Shift</th>
-                <th className="px-3 py-2.5 font-semibold">Working Hours</th>
-                <th className="px-3 py-2.5 font-semibold">Overtime</th>
-                <th className="px-3 py-2.5 font-semibold">Late</th>
-                <th className="px-3 py-2.5 font-semibold">Early Exit</th>
-                {breakEnabled ? (
-                  <th className="px-3 py-2.5 font-semibold">Break</th>
-                ) : null}
-                <th className="px-3 py-2.5 font-semibold">Source</th>
-                {canRequestChange ? (
-                  <th className="px-3 py-2.5 font-semibold">Action</th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {displayRows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={historyColSpan}
-                    className="px-3 py-10 text-center text-[var(--muted)]"
-                  >
-                    {listLoading ? (
-                      <div className="flex flex-col items-center justify-center gap-3 py-2">
-                        <LogoLoader size="sm" />
-                        <span className="text-[12px]">Loading attendance logs…</span>
-                      </div>
-                    ) : filterActive ? (
-                      `No ${
-                        statusFilterOptions.find((o) => o.value === statusFilter)
-                          ?.label || statusFilter
-                      } records for this month.`
-                    ) : (
-                      "No attendance logs for this period."
-                    )}
-                  </td>
-                </tr>
-              ) : (
-                displayRows.map((row, index) => {
-                  const late = Number(row.lateMinutes) || 0;
-                  const early = Number(row.earlyExitMinutes) || 0;
-                  const ot = Number(row.overtimeHours) || 0;
-                  const breakMins = pickNumber(
-                    row.breakMinutes,
-                    row.totalBreakMinutes
-                  );
-                  const flags = [
-                    row.isHolidayWork ? "Holiday work" : null,
-                    row.isManualOverride ? "Manual" : null,
-                    row.isMockGps ? "Mock GPS" : null,
-                    row.remarks ? "Remarks" : null,
-                  ].filter(Boolean);
-
-                  return (
-                    <tr
-                      key={row.logId}
-                      className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-soft)]/70"
-                    >
-                      <td className="px-3 py-3 tabular-nums text-[var(--muted)]">
-                        {rowSerial(index, currentPage, pageLimit)}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3 font-medium text-[var(--text)]">
-                        {formatDate(row.attendanceDate)}
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-col gap-1">
-                          <AttendanceTypeBadge
-                            row={row}
-                            types={attendanceTypes}
-                          />
-                          {flags.length ? (
-                            <span className="text-[10px] text-[var(--muted)]">
-                              {flags.join(" · ")}
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
-                        <span className="inline-flex items-center gap-1">
-                          <LogIn className="h-3 w-3 text-[var(--success)]" />
-                          {formatTime(row.checkInTime)}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
-                        <span className="inline-flex items-center gap-1">
-                          <LogOut className="h-3 w-3 text-[var(--violet)]" />
-                          {formatTime(row.checkOutTime)}
-                        </span>
-                      </td>
-                      <td
-                        className="max-w-[150px] truncate px-3 py-3 text-[var(--muted)]"
-                        title={row.shiftName || ""}
-                      >
-                        {row.shiftName || "—"}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
-                        {row.workingHours != null
-                          ? formatHoursMinutes(row.workingHours)
-                          : "—"}
-                      </td>
-                      <td
-                        className={`whitespace-nowrap px-3 py-3 ${
-                          ot > 0
-                            ? "font-semibold text-[var(--violet)]"
-                            : "text-[var(--muted)]"
-                        }`}
-                      >
-                        {row.overtimeHours != null
-                          ? formatHoursMinutes(row.overtimeHours)
-                          : "—"}
-                      </td>
-                      <td
-                        className={`whitespace-nowrap px-3 py-3 tabular-nums ${
-                          late > 0
-                            ? "font-semibold text-[var(--warning)]"
-                            : "text-[var(--muted)]"
-                        }`}
-                      >
-                        {row.lateMinutes != null ? `${late} min` : "—"}
-                      </td>
-                      <td
-                        className={`whitespace-nowrap px-3 py-3 tabular-nums ${
-                          early > 0
-                            ? "font-semibold text-[var(--danger)]"
-                            : "text-[var(--muted)]"
-                        }`}
-                      >
-                        {row.earlyExitMinutes != null ? `${early} min` : "—"}
-                      </td>
-                      {breakEnabled ? (
-                        <td className="whitespace-nowrap px-3 py-3 text-[var(--text)]">
-                          {breakMins != null ? (
-                            <span className="inline-flex items-center gap-1">
-                              <Coffee className="h-3 w-3 text-[var(--warning)]" />
-                              {Math.round(breakMins)} min
-                              {row.breakCount != null
-                                ? ` · ${row.breakCount}`
-                                : ""}
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                      ) : null}
-                      <td className="px-3 py-3">
-                        <Badge
-                          variant="muted"
-                          className="rounded-full capitalize"
-                        >
-                          {row.punchSource || "—"}
-                        </Badge>
-                      </td>
-                      {canRequestChange ? (
-                        <td className="px-3 py-3">
-                          <HistoryRowActions logId={row.logId} />
-                        </td>
-                      ) : null}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        )}
-
-        <div className="mt-4 flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[12px] text-[var(--muted)]">
-            Showing{" "}
-            <span className="font-semibold text-[var(--text)]">{fromRow}</span>–
-            <span className="font-semibold text-[var(--text)]">{toRow}</span> of{" "}
-            <span className="font-semibold text-[var(--text)]">{total}</span>
-            {" · "}
-            limit {pageLimit}
-            {filterActive ? " · filtered" : ""}
-          </p>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
-              Rows
-              <select
-                value={pageLimit}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-                className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-[12px] text-[var(--text)]"
-              >
-                {[10, 20, 30, 50].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 rounded-lg"
-              disabled={currentPage <= 1 || listLoading}
-              onClick={() => setPage(Math.max(1, currentPage - 1))}
-            >
-              Previous
-            </Button>
-
-            <span className="inline-flex min-w-[88px] items-center justify-center gap-1 text-[12px] font-semibold text-[var(--text)]">
-              <Timer className="h-3.5 w-3.5 text-[var(--muted)]" />
-              {currentPage} / {totalPages}
-            </span>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 rounded-lg"
-              disabled={currentPage >= totalPages || listLoading}
-              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
-            >
-              Next
-            </Button>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
+            <SoftStat label="Total Days" value={summary?.totalDays ?? 0} />
+            <SoftStat
+              label="Present"
+              value={summary?.presentCount ?? summary?.present ?? 0}
+              color={getAttendanceTypeColor("P", attendanceTypes, "#22c55e")}
+            />
+            {summary?.absentCount != null || summary?.absent != null ? (
+              <SoftStat
+                label="Absent"
+                value={summary?.absentCount ?? summary?.absent}
+                color={getAttendanceTypeColor("A", attendanceTypes, "#ef4444")}
+              />
+            ) : null}
+            {summary?.leaveCount != null || summary?.leave != null ? (
+              <SoftStat
+                label="Leave"
+                value={summary?.leaveCount ?? summary?.leave}
+                color={getAttendanceTypeColor("CL", attendanceTypes, "#7b39ec")}
+              />
+            ) : null}
+            {summary?.holidayCount != null || summary?.holiday != null ? (
+              <SoftStat
+                label="Holiday"
+                value={summary?.holidayCount ?? summary?.holiday}
+                color={getAttendanceTypeColor("H", attendanceTypes, "#a0dab5")}
+              />
+            ) : null}
+            {summary?.halfDayCount != null || summary?.halfDay != null ? (
+              <SoftStat
+                label="Half Day"
+                value={summary?.halfDayCount ?? summary?.halfDay}
+                color={getAttendanceTypeColor("HD", attendanceTypes, "#f97316")}
+              />
+            ) : null}
+            <SoftStat
+              label="Late Days"
+              value={summary?.lateCount ?? 0}
+              color={getAttendanceTypeColor("LP", attendanceTypes, "#f59e0b")}
+            />
+            <SoftStat
+              label="Late Minutes"
+              value={summary?.totalLateMinutes ?? 0}
+            />
+            <SoftStat
+              label="Working Hours"
+              value={formatHoursMinutes(summary?.totalWorkingHours)}
+            />
+            {breakEnabled ? (
+              <SoftStat
+                label="Break Minutes"
+                value={summary?.totalBreakMinutes ?? 0}
+              />
+            ) : null}
           </div>
-        </div>
-      </Card>
-    </div>
+        )}
+      </CollapsibleSection>
+
+      <TablePanel
+        title="Attendance Logs"
+        headerExtra={
+          <DateRangeBadge
+            from={range.from}
+            to={range.to}
+            dateFormat={dateFormat}
+          />
+        }
+        collapsible
+        collapsed={logsCollapsed}
+        onCollapsedChange={setLogsCollapsed}
+        tabs={RANGE_TABS.map((t) => ({ value: t.key, label: t.label }))}
+        tab={rangePreset === "custom" ? "" : rangePreset}
+        onTabChange={setPreset}
+        recordCount={total}
+        search={historyQuery}
+        onSearchChange={onSearchChange}
+        searchPlaceholder="Search logs…"
+        filterActive={activeFilterCount >= 1}
+        activeFilterCount={activeFilterCount}
+        filterTitle="Filters"
+        filterSubtitle="Status and custom date range"
+        drawerFields={
+          <div className="space-y-5">
+            <AttendanceStatusFilter
+              value={draftStatus}
+              onChange={setDraftStatus}
+              options={statusFilterOptions}
+              defaultValue="all"
+            />
+
+            <div className="space-y-2.5 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)]/60 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  Custom date range
+                </p>
+                {draftFrom || draftTo ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftFrom("");
+                      setDraftTo("");
+                    }}
+                    className="text-[11px] font-medium text-[var(--violet)] hover:underline"
+                  >
+                    Clear dates
+                  </button>
+                ) : null}
+              </div>
+              <MuiDateRangeFields
+                from={draftFrom}
+                to={draftTo}
+                onFromChange={setDraftFrom}
+                onToChange={setDraftTo}
+                clearable
+              />
+              <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+                Apply uses these dates for attendance logs.
+              </p>
+            </div>
+          </div>
+        }
+        onApplyFilters={applyFilters}
+        onResetFilters={resetFilters}
+        onExport={handleExportCsv}
+        exporting={exporting}
+        onRefresh={refetch}
+        columns={columns}
+        rows={displayRows}
+        getRowKey={(row) => row.logId || row.attendanceDate}
+        minWidth="1100px"
+        loading={listLoading}
+        loadingLabel="Loading attendance"
+        loadingHint="Fetching attendance logs…"
+        error={filterError}
+        emptyTitle="No attendance logs for this period."
+        page={currentPage}
+        pageSize={pageLimit}
+        total={total}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
+    </PortalPage>
   );
 }
