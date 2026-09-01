@@ -45,7 +45,7 @@ export function ShiftCard({ shift, company, timeFormat = "12h" }) {
   if (!shift) {
     return (
       <Card title="Current Shift" className="h-full">
-        <p className="text-sm text-[var(--muted)]">No shift assigned</p>
+        <p className="heading-sub">No shift assigned</p>
       </Card>
     );
   }
@@ -104,7 +104,7 @@ export function ShiftCard({ shift, company, timeFormat = "12h" }) {
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
               {dayShift ? "Day shift" : "Night shift"}
             </p>
-            <p className="truncate font-[family-name:var(--font-heading)] text-[16px] font-semibold text-[var(--violet)]">
+            <p className="truncate text-[14px] font-semibold text-[var(--violet)]">
               {shift.shiftName}
             </p>
           </div>
@@ -116,7 +116,7 @@ export function ShiftCard({ shift, company, timeFormat = "12h" }) {
               <Clock3 className="h-3 w-3 text-[var(--violet)]" />
               Start
             </div>
-            <p className="mt-1 text-[15px] font-bold tabular-nums text-[var(--text)]">
+            <p className="mt-1 text-[16px] font-bold tabular-nums leading-none text-[var(--text)]">
               {formatTime(shift.startTime, timeFormat)}
             </p>
           </div>
@@ -130,7 +130,7 @@ export function ShiftCard({ shift, company, timeFormat = "12h" }) {
               <Clock3 className="h-3 w-3 text-[var(--violet)]" />
               End
             </div>
-            <p className="mt-1 text-[15px] font-bold tabular-nums text-[var(--text)]">
+            <p className="mt-1 text-[16px] font-bold tabular-nums leading-none text-[var(--text)]">
               {formatTime(shift.endTime, timeFormat)}
             </p>
           </div>

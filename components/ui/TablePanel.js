@@ -14,6 +14,7 @@ import { FlashBanner } from "@/components/ui/FlashBanner";
 import { ListToolbar } from "@/components/ui/ListToolbar";
 import { PageLoader } from "@/components/ui/Spinner";
 import { TablePagination } from "@/components/ui/TablePagination";
+import { PanelTotalCount } from "@/components/ui/PanelTotalCount";
 
 /**
  * One Attendance-style table panel for the whole portal.
@@ -24,6 +25,7 @@ import { TablePagination } from "@/components/ui/TablePagination";
 export function TablePanel({
   title,
   subtitle,
+  titleCount,
   headerExtra,
   collapsible = false,
   defaultCollapsed = false,
@@ -92,6 +94,8 @@ export function TablePanel({
     typeof total === "number" ? total : list.length;
   const displayCount =
     recordCount != null ? recordCount : entryTotal;
+  const toolbarRecordCount =
+    titleCount != null ? undefined : displayCount;
 
   const showToolbar =
     (Array.isArray(tabs) && tabs.length > 0) ||
@@ -108,7 +112,7 @@ export function TablePanel({
         fill ? "flex-1" : ""
       } ${className}`}
     >
-      {(title || headerExtra || collapsible) && (
+      {(title || titleCount != null || headerExtra || collapsible) && (
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-2.5">
           <div className="flex min-w-0 flex-wrap items-center gap-2.5">
             {title ? (
@@ -125,7 +129,9 @@ export function TablePanel({
             ) : null}
             {headerExtra}
           </div>
-          {collapsible ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {titleCount != null ? <PanelTotalCount count={titleCount} /> : null}
+            {collapsible ? (
             <button
               type="button"
               onClick={() => setCollapsed(!collapsed)}
@@ -137,6 +143,7 @@ export function TablePanel({
               />
             </button>
           ) : null}
+          </div>
         </div>
       )}
 
@@ -148,7 +155,7 @@ export function TablePanel({
                 tabs={tabs}
                 tab={tab}
                 onTabChange={onTabChange}
-                recordCount={displayCount}
+                recordCount={toolbarRecordCount}
                 search={search}
                 onSearchChange={onSearchChange}
                 searchPlaceholder={searchPlaceholder}

@@ -67,7 +67,7 @@ export function DashboardView() {
   if ((error || !data) && !loading) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center">
-        <p className="text-sm text-[var(--danger)]">
+        <p className="heading-sub text-[var(--danger)]">
           {error || "Unable to load dashboard"}
         </p>
         <div className="flex gap-2">

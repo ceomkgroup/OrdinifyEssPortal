@@ -15,13 +15,17 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ComingSoon } from "@/components/ui/ComingSoon";
-import { FilterSelect, FilterDate, REQUEST_STATUS_OPTIONS } from "@/components/ui/ListFilters";
+import { REQUEST_STATUS_OPTIONS } from "@/components/ui/ListFilters";
+import { SearchableFilter } from "@/components/attendance/AttendanceStatusFilter";
+import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
 import { TablePanel } from "@/components/ui/TablePanel";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { useAllRequests } from "@/hooks/useAllRequests";
+import { useRequestListQuery } from "@/hooks/useRequestListQuery";
 import {
   countActiveDateFilters,
   dateInRange,
@@ -96,25 +100,28 @@ export function RequestsHubView() {
   const { canShowRequestTile, loading: modulesLoading } = useModules();
   const { rows, loading, error, refetch, sources } = useAllRequests();
 
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [draftTypeFilter, setDraftTypeFilter] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [draftDateFrom, setDraftDateFrom] = useState("");
-  const [draftDateTo, setDraftDateTo] = useState("");
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
-
-  useEffect(() => {
-    setDraftTypeFilter(typeFilter);
-  }, [typeFilter]);
-
-  useEffect(() => {
-    setDraftDateFrom(dateFrom);
-    setDraftDateTo(dateTo);
-  }, [dateFrom, dateTo]);
+  const {
+    status: statusFilter,
+    setStatus: setStatusFilter,
+    page,
+    setPage,
+    limit,
+    setLimit,
+    listQuery: query,
+    setListQuery: setQuery,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    draftDateFrom,
+    setDraftDateFrom,
+    draftDateTo,
+    setDraftDateTo,
+    typeFilter,
+    setTypeFilter,
+    draftTypeFilter,
+    setDraftTypeFilter,
+  } = useRequestListQuery({ withType: true });
 
   const statusTabs = REQUEST_STATUS_OPTIONS.map((item) => ({
     value: item.value,
@@ -173,6 +180,7 @@ export function RequestsHubView() {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / limit) || 1);
   const currentPage = Math.min(page, totalPages);
+  const total = filtered.length;
 
   const pagedRows = useMemo(() => {
     const start = (currentPage - 1) * limit;
@@ -301,59 +309,22 @@ export function RequestsHubView() {
     >
 
       <CollapsibleSection title="Summary">
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        {[
-          {
-            label: "In this list",
-            value: loading ? "…" : String(rows.length),
-            icon: Inbox,
-            soft: "bg-[var(--info-soft)]",
-            tone: "text-[var(--info)]",
-          },
-          {
-            label: "Pending",
-            value: loading ? "…" : String(pendingTotal),
-            icon: Hourglass,
-            soft: "bg-[var(--warning-soft)]",
-            tone: "text-[var(--warning)]",
-          },
-          {
-            label: "Approved",
-            value: loading ? "…" : String(approvedTotal),
-            icon: CheckCircle2,
-            soft: "bg-[var(--success-soft)]",
-            tone: "text-[var(--success)]",
-          },
-          {
-            label: "Live modules",
-            value: String(liveTiles.length),
-            icon: Layers,
-            soft: "bg-[var(--lavender-soft)]",
-            tone: "text-[var(--violet)]",
-          },
-        ].map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <div
-              key={kpi.label}
-              className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3"
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${kpi.soft} ${kpi.tone}`}
-                >
-                  <Icon className="h-4 w-4" />
-                </span>
-                <p className="text-[11px] font-medium text-[var(--muted)]">
-                  {kpi.label}
-                </p>
-              </div>
-              <p className="mt-2 text-[22px] font-bold tabular-nums leading-none text-[var(--text)]">
-                {kpi.value}
-              </p>
-            </div>
-          );
-        })}
+        <div className={SUMMARY_GRID_CLASS}>
+          <SoftStat
+            label="In this list"
+            value={loading ? "…" : String(rows.length)}
+          />
+          <SoftStat
+            label="Pending"
+            value={loading ? "…" : String(pendingTotal)}
+            color="#f59e0b"
+          />
+          <SoftStat
+            label="Approved"
+            value={loading ? "…" : String(approvedTotal)}
+            color="#22c55e"
+          />
+          <SoftStat label="Live modules" value={String(liveTiles.length)} color="#7b39ec" />
         </div>
       </CollapsibleSection>
 
@@ -411,40 +382,35 @@ export function RequestsHubView() {
       {/* Unified list */}
       <TablePanel
         title="Request Logs"
+        titleCount={total}
         tabs={statusTabs}
         tab={statusFilter}
         onTabChange={setStatusFilter}
         recordCount={filtered.length}
         search={query}
         onSearchChange={setQuery}
-        searchPlaceholder="Search summary, type, reason…"
+        searchPlaceholder="Search logs…"
+        filterTitle="Filters"
+        filterSubtitle="Date range and request type"
         filterActive={activeFilterCount > 0}
         activeFilterCount={activeFilterCount}
         drawerFields={
-          <>
-            <FilterDate
-              label="From date"
-              value={draftDateFrom}
-              onChange={setDraftDateFrom}
-              max={draftDateTo || undefined}
-              clearable
-            />
-            <FilterDate
-              label="To date"
-              value={draftDateTo}
-              onChange={setDraftDateTo}
-              min={draftDateFrom || undefined}
-              clearable
-            />
-            <FilterSelect
+          <div className="space-y-5">
+            <SearchableFilter
               label="Request type"
               value={draftTypeFilter}
               onChange={setDraftTypeFilter}
               options={typeOptions}
-              clearable
               defaultValue="all"
             />
-          </>
+            <FilterDrawerDateRange
+              from={draftDateFrom}
+              to={draftDateTo}
+              onFromChange={setDraftDateFrom}
+              onToChange={setDraftDateTo}
+              hint="Apply uses these dates for request logs."
+            />
+          </div>
         }
         onApplyFilters={() => {
           setDateFrom(draftDateFrom);

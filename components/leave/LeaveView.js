@@ -4,15 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Banknote,
-  CalendarDays,
-  CheckCircle2,
   Clock3,
   Eye,
   FilePenLine,
-  Hourglass,
   Inbox,
   MoreVertical,
-  Palmtree,
   Plus,
   RefreshCw,
   Send,
@@ -21,9 +17,16 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FlashBanner } from "@/components/ui/FlashBanner";
-import { FilterSelect } from "@/components/ui/ListFilters";
+import { SearchableFilter } from "@/components/attendance/AttendanceStatusFilter";
+import {
+  readQueryInt,
+  readQueryString,
+  usePersistListQuery,
+  usePortalQuery,
+} from "@/hooks/usePortalQuery";
 import { MetaBadge } from "@/components/ui/MetaBadge";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -129,147 +132,6 @@ function StatusPill({ status, label }) {
     >
       {label || status || "—"}
     </span>
-  );
-}
-
-function LeaveMetricCard({
-  icon: Icon = CalendarDays,
-  title,
-  description,
-  color = "#7b39ec",
-  primaryLabel = "Available",
-  primaryValue,
-  secondaryLabel = "Used",
-  secondaryValue,
-  secondaryHint,
-  onApply,
-  onView,
-  applyLabel = "Apply",
-}) {
-  return (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-dashed border-[var(--violet)]/35 bg-gradient-to-br from-[var(--lavender-soft)] via-[var(--surface)] to-[var(--violet-soft)] p-4 shadow-[var(--card-shadow)]">
-      <div
-        className="absolute -right-8 -top-8 h-28 w-28 rounded-full blur-2xl"
-        style={{ background: `${color}22` }}
-      />
-      <div className="relative min-w-0">
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white"
-            style={{ background: color }}
-          >
-            <Icon className="h-4 w-4" />
-          </span>
-          <p className="truncate text-[14px] font-semibold text-[var(--text)]">
-            {title}
-          </p>
-        </div>
-        {description ? (
-          <p className="mt-2 text-[12px] leading-relaxed text-[var(--muted)]">
-            {description}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="relative mt-4 grid grid-cols-2 gap-2">
-        <div className="rounded-xl bg-[var(--surface)]/80 px-3 py-2.5 ring-1 ring-[var(--border)]">
-          <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            {primaryLabel}
-          </p>
-          <p
-            className="mt-0.5 text-[16px] font-bold tabular-nums"
-            style={{ color }}
-          >
-            {primaryValue}
-          </p>
-        </div>
-        <div className="rounded-xl bg-[var(--surface)]/80 px-3 py-2.5 ring-1 ring-[var(--border)]">
-          <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            {secondaryLabel}
-          </p>
-          <p className="mt-0.5 text-[16px] font-bold tabular-nums text-[var(--text)]">
-            {secondaryValue}
-            {secondaryHint ? (
-              <span className="ml-1 text-[11px] font-semibold text-[var(--warning)]">
-                {secondaryHint}
-              </span>
-            ) : null}
-          </p>
-        </div>
-      </div>
-
-      <div className="relative mt-auto flex flex-wrap gap-2 pt-4">
-        <Button
-          type="button"
-          className="h-9 flex-1 rounded-xl"
-          onClick={onApply}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          {applyLabel}
-        </Button>
-        {onView ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 rounded-xl"
-            onClick={onView}
-          >
-            View
-          </Button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function BalanceCard({ row, fiscalYear, onApply, onView, leaveTypes = [] }) {
-  const remaining = Number(row.remaining) || 0;
-  const used = Number(row.used) || 0;
-  const pending = Number(row.pending) || 0;
-  const allocated = Number(row.allocated) || 0;
-  const carry = Number(row.carryForward) || 0;
-  const pool = allocated + carry;
-  const color = row.colorCode || "#7b39ec";
-  const title = leaveTypeName(row.leaveTypeId, leaveTypes, [row]);
-
-  return (
-    <LeaveMetricCard
-      icon={CalendarDays}
-      title={title}
-      description={`FY ${row.fiscalYear ?? fiscalYear} · Pool ${num(pool)} days (alloc ${num(allocated)}${carry ? ` + CF ${num(carry)}` : ""}).`}
-      color={color}
-      primaryLabel="Available"
-      primaryValue={num(remaining)}
-      secondaryLabel="Used"
-      secondaryValue={num(used)}
-      secondaryHint={pending > 0 ? `· ${num(pending)} pend` : undefined}
-      onApply={() => onApply?.(row.leaveTypeId)}
-      onView={onView ? () => onView(row) : undefined}
-    />
-  );
-}
-
-function EncashmentPromoCard({
-  pendingCount,
-  totalCount,
-  remainingDays,
-  onApply,
-  onView,
-}) {
-  return (
-    <LeaveMetricCard
-      icon={Banknote}
-      title="Leave encashment"
-      description="Convert unused leave days into salary when your company policy allows it."
-      color="#7b39ec"
-      primaryLabel="Available"
-      primaryValue={num(remainingDays)}
-      secondaryLabel="Requests"
-      secondaryValue={totalCount}
-      secondaryHint={pendingCount > 0 ? `· ${pendingCount} pending` : undefined}
-      onApply={onApply}
-      onView={onView}
-    />
   );
 }
 
@@ -454,9 +316,26 @@ export function LeaveView({ initialTab = "requests" }) {
     loading: leaveTypesLoading,
   } = useLeaveTypes();
 
-  const [mainTab, setMainTab] = useState(() =>
-    initialTab === "encashment" ? "encashment" : "requests"
+  const { searchParams } = usePortalQuery();
+  const currentYear = new Date().getFullYear();
+  const leaveQueryDefaults = useMemo(
+    () => ({
+      status: "all",
+      q: "",
+      leaveType: "all",
+      fy: String(currentYear),
+      page: "1",
+      limit: "10",
+      encashStatus: "all",
+      encashQ: "",
+      encashType: "all",
+      encashPage: "1",
+      encashLimit: "10",
+    }),
+    [currentYear]
   );
+  const urlBootRef = useRef(false);
+
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(emptyLeaveForm);
   const [editingRequestId, setEditingRequestId] = useState("");
@@ -464,20 +343,79 @@ export function LeaveView({ initialTab = "requests" }) {
   const [message, setMessage] = useState("");
   const [cancellingId, setCancellingId] = useState("");
   const [detail, setDetail] = useState(null);
-  const [balanceDetail, setBalanceDetail] = useState(null);
 
   const [encashOpen, setEncashOpen] = useState(false);
   const [encashForm, setEncashForm] = useState(emptyEncashForm);
   const [encashSaving, setEncashSaving] = useState(false);
   const [encashCancellingId, setEncashCancellingId] = useState("");
   const [encashDetail, setEncashDetail] = useState(null);
-  const [listQuery, setListQuery] = useState("");
-  const [leaveTypeFilter, setLeaveTypeFilter] = useState("all");
-  const [draftLeaveType, setDraftLeaveType] = useState("all");
-  const [encashQuery, setEncashQuery] = useState("");
-  const [encashTypeFilter, setEncashTypeFilter] = useState("all");
-  const [draftEncashType, setDraftEncashType] = useState("all");
+  const [listQuery, setListQuery] = useState(() =>
+    readQueryString(searchParams, "q", "")
+  );
+  const [leaveTypeFilter, setLeaveTypeFilter] = useState(() =>
+    readQueryString(searchParams, "leaveType", "all")
+  );
+  const [draftLeaveType, setDraftLeaveType] = useState(leaveTypeFilter);
+  const [encashQuery, setEncashQuery] = useState(() =>
+    readQueryString(searchParams, "encashQ", "")
+  );
+  const [encashTypeFilter, setEncashTypeFilter] = useState(() =>
+    readQueryString(searchParams, "encashType", "all")
+  );
+  const [draftEncashType, setDraftEncashType] = useState(encashTypeFilter);
   const [draftFiscalYear, setDraftFiscalYear] = useState(String(fiscalYear));
+
+  useEffect(() => {
+    if (urlBootRef.current) return;
+    urlBootRef.current = true;
+    setFiscalYear(readQueryInt(searchParams, "fy", currentYear));
+    setStatusFilter(readQueryString(searchParams, "status", "all"));
+    setPage(readQueryInt(searchParams, "page", 1));
+    setLimit(readQueryInt(searchParams, "limit", 10));
+    setEncashStatusFilter(readQueryString(searchParams, "encashStatus", "all"));
+    setEncashPage(readQueryInt(searchParams, "encashPage", 1));
+    setEncashLimit(readQueryInt(searchParams, "encashLimit", 10));
+  }, [
+    searchParams,
+    currentYear,
+    setFiscalYear,
+    setStatusFilter,
+    setPage,
+    setLimit,
+    setEncashStatusFilter,
+    setEncashPage,
+    setEncashLimit,
+  ]);
+
+  usePersistListQuery(
+    {
+      status,
+      q: listQuery,
+      leaveType: leaveTypeFilter,
+      fy: fiscalYear,
+      page,
+      limit,
+      encashStatus,
+      encashQ: encashQuery,
+      encashType: encashTypeFilter,
+      encashPage,
+      encashLimit,
+    },
+    leaveQueryDefaults,
+    [
+      status,
+      listQuery,
+      leaveTypeFilter,
+      fiscalYear,
+      page,
+      limit,
+      encashStatus,
+      encashQuery,
+      encashTypeFilter,
+      encashPage,
+      encashLimit,
+    ]
+  );
 
   useEffect(() => {
     setDraftLeaveType(leaveTypeFilter);
@@ -498,7 +436,6 @@ export function LeaveView({ initialTab = "requests" }) {
     { value: "cancelled", label: "Cancelled" },
   ];
 
-  const currentYear = new Date().getFullYear();
   const yearOptions = useMemo(() => {
     const y = currentYear;
     return [y - 1, y, y + 1];
@@ -965,7 +902,6 @@ export function LeaveView({ initialTab = "requests" }) {
       setForm(emptyLeaveForm());
       setEditingRequestId("");
       setFormOpen(false);
-      setMainTab("requests");
     } catch (err) {
       setError(err.message || "Failed to submit leave request");
     } finally {
@@ -1047,22 +983,9 @@ export function LeaveView({ initialTab = "requests" }) {
     }
   }
 
-  useEffect(() => {
-    if (mainTab === "encashment" && !encashmentEnabled) {
-      setMainTab("requests");
-    }
-  }, [encashmentEnabled, mainTab]);
-
   if (balanceLoading && !balances.length && requestsLoading) {
     return <PageLoader label="Loading leave" hint="Fetching balances and requests…" />;
   }
-
-  const tabs = [
-    { id: "requests", label: "Requests", count: requestTotal },
-    ...(encashmentEnabled
-      ? [{ id: "encashment", label: "Encashment", count: encashTotal }]
-      : []),
-  ];
 
   return (
     <PortalPage
@@ -1094,59 +1017,15 @@ export function LeaveView({ initialTab = "requests" }) {
     >
 
       <CollapsibleSection title="Summary">
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        {[
-          {
-            label: "Remaining",
-            value: num(totals.remaining),
-            icon: CheckCircle2,
-            tone: "text-[var(--success)]",
-            soft: "bg-[var(--success-soft)]",
-          },
-          {
-            label: "Used",
-            value: num(totals.used),
-            icon: CalendarDays,
-            tone: "text-[var(--violet)]",
-            soft: "bg-[var(--lavender-soft)]",
-          },
-          {
-            label: "Pending approval",
-            value: num(totals.pending),
-            icon: Hourglass,
-            tone: "text-[var(--warning)]",
-            soft: "bg-[var(--warning-soft)]",
-          },
-          {
-            label: "Leave types",
-            value: String(balances.length),
-            icon: Palmtree,
-            tone: "text-[var(--info)]",
-            soft: "bg-[var(--info-soft)]",
-          },
-        ].map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <div
-              key={kpi.label}
-              className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3"
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${kpi.soft} ${kpi.tone}`}
-                >
-                  <Icon className="h-4 w-4" />
-                </span>
-                <p className="text-[11px] font-medium text-[var(--muted)]">
-                  {kpi.label}
-                </p>
-              </div>
-              <p className="mt-2 text-[22px] font-bold tabular-nums leading-none text-[var(--text)]">
-                {kpi.value}
-              </p>
-            </div>
-          );
-        })}
+        <div className={SUMMARY_GRID_CLASS}>
+          <SoftStat label="Remaining" value={num(totals.remaining)} color="#22c55e" />
+          <SoftStat label="Used" value={num(totals.used)} color="#7b39ec" />
+          <SoftStat
+            label="Pending approval"
+            value={num(totals.pending)}
+            color="#f59e0b"
+          />
+          <SoftStat label="Leave types" value={String(balances.length)} />
         </div>
       </CollapsibleSection>
 
@@ -1167,152 +1046,44 @@ export function LeaveView({ initialTab = "requests" }) {
         />
       ) : null}
 
-      {/* Balances */}
-      <CollapsibleSection title="Leave balances">
-        {balanceLoading ? (
-          <PageLoader
-            compact
-            label="Loading balances"
-            hint="Fetching leave quotas…"
-          />
-        ) : balances.length === 0 ? (
-          <EmptyState
-            icon={Palmtree}
-            title={`No balances for FY ${fiscalYear}`}
-            hint="Ask HR if leave types have been assigned for this fiscal year."
-          />
-        ) : (
-          <div
-            className={`grid gap-3 sm:grid-cols-2 ${
-              encashmentEnabled && !encashDisabled
-                ? "xl:grid-cols-3"
-                : balances.length >= 3
-                  ? "xl:grid-cols-3"
-                  : "xl:grid-cols-2"
-            }`}
-          >
-            {balances.map((row) => (
-              <BalanceCard
-                key={row.balanceId || row.leaveTypeId}
-                row={row}
-                fiscalYear={fiscalYear}
-                leaveTypes={leaveTypes}
-                onApply={openApply}
-                onView={setBalanceDetail}
-              />
-            ))}
-            {encashmentEnabled && !encashDisabled ? (
-              <EncashmentPromoCard
-                remainingDays={totals.remaining}
-                totalCount={encashTotal}
-                pendingCount={
-                  encashRows.filter(
-                    (r) => String(r.status || "").toLowerCase() === "pending"
-                  ).length
-                }
-                onApply={() => {
-                  setEncashForm((prev) => ({
-                    ...prev,
-                    fiscalYear: String(fiscalYear),
-                  }));
-                  setEncashOpen(true);
-                }}
-                onView={() => setMainTab("encashment")}
-              />
-            ) : null}
-          </div>
-        )}
-      </CollapsibleSection>
-
-      {/* Tabs + lists */}
+      {/* Leave + encashment lists */}
       <Card
         data-fill-panel=""
         className="!p-0 min-h-0 overflow-hidden"
         bodyClassName="!min-h-0 flex flex-col overflow-hidden"
       >
-        <div className="flex shrink-0 flex-col gap-3 border-b border-[var(--border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-5">
-          <div className="inline-flex rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] p-1">
-            {tabs.map((tab) => {
-              const active = mainTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setMainTab(tab.id)}
-                  className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-[13px] font-semibold transition ${
-                    active
-                      ? "bg-[var(--surface)] text-[var(--violet)] shadow-[var(--card-shadow)]"
-                      : "text-[var(--muted)] hover:text-[var(--text)]"
-                  }`}
-                >
-                  {tab.id === "encashment" ? (
-                    <Banknote className="h-4 w-4" />
-                  ) : (
-                    <Inbox className="h-4 w-4" />
-                  )}
-                  {tab.label}
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${
-                      active
-                        ? "bg-[var(--lavender-soft)] text-[var(--violet)]"
-                        : "bg-[var(--muted-bg)] text-[var(--muted)]"
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {mainTab === "encashment" && encashmentEnabled && !encashDisabled ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 rounded-xl"
-              onClick={() => {
-                setEncashOpen(true);
-                setEncashForm((prev) => ({
-                  ...prev,
-                  fiscalYear: String(fiscalYear),
-                }));
-              }}
-            >
-              <Banknote className="h-4 w-4" />
-              Apply encashment
-            </Button>
-          ) : null}
-        </div>
-
-        {mainTab === "requests" ? (
-          <TablePanel
-            className="min-h-0 border-0 shadow-none rounded-none"
-            title="Leave Logs"
+        <TablePanel
+          className="min-h-0 flex-1 border-0 shadow-none rounded-none"
+          title="Leave Logs"
+          titleCount={requestTotal}
             tabs={statusTabs}
             tab={status}
             onTabChange={setStatusFilter}
             recordCount={filteredRequests.length}
             search={listQuery}
             onSearchChange={setListQuery}
-            searchPlaceholder="Search leave type, reason, status…"
+            searchPlaceholder="Search logs…"
+            filterTitle="Filters"
+            filterSubtitle="Fiscal year and leave type"
             filterActive={leaveListFilterCount > 0}
             activeFilterCount={leaveListFilterCount}
             drawerFields={
-              <>
-                <FilterSelect
+              <div className="space-y-5">
+                <SearchableFilter
                   label="Fiscal year"
                   value={draftFiscalYear}
                   onChange={setDraftFiscalYear}
                   options={fiscalYearFilterOptions}
+                  defaultValue={String(currentYear)}
                 />
-                <FilterSelect
+                <SearchableFilter
                   label="Leave type"
                   value={draftLeaveType}
                   onChange={setDraftLeaveType}
                   options={leaveTypeOptions}
-                  clearable
                   defaultValue="all"
                 />
-              </>
+              </div>
             }
             onApplyFilters={() => {
               setFiscalYear(Number(draftFiscalYear));
@@ -1327,6 +1098,7 @@ export function LeaveView({ initialTab = "requests" }) {
               setLeaveTypeFilter("all");
               setPage(1);
             }}
+            onRefresh={refetch}
             columns={requestColumns}
             rows={filteredRequests}
             getRowKey={(row) =>
@@ -1363,47 +1135,58 @@ export function LeaveView({ initialTab = "requests" }) {
               setPage(1);
             }}
           />
-        ) : encashDisabled ? (
-          <div className="p-4 md:p-5">
-            <EmptyState
-              icon={Banknote}
-              title="Encashment not available"
-              hint={
-                encashMessage ||
-                "Leave encashment is not enabled for this company."
-              }
-            />
-          </div>
-        ) : (
+
+        {encashmentEnabled && !encashDisabled ? (
           <TablePanel
-            className="min-h-0 border-0 shadow-none rounded-none"
+            className="min-h-0 shrink-0 border-0 border-t border-[var(--border)] shadow-none rounded-none"
             title="Encashment Logs"
+            titleCount={encashTotal}
+            fill={false}
+            toolbarExtra={
+              <Button
+                type="button"
+                variant="outline"
+                className="h-7 rounded-lg px-2.5 text-[11px]"
+                onClick={() => {
+                  setEncashOpen(true);
+                  setEncashForm((prev) => ({
+                    ...prev,
+                    fiscalYear: String(fiscalYear),
+                  }));
+                }}
+              >
+                <Banknote className="h-3.5 w-3.5" />
+                Apply encashment
+              </Button>
+            }
             tabs={statusTabs}
             tab={encashStatus}
             onTabChange={setEncashStatusFilter}
             recordCount={filteredEncashRows.length}
             search={encashQuery}
             onSearchChange={setEncashQuery}
-            searchPlaceholder="Search leave type, remarks, status…"
+            searchPlaceholder="Search logs…"
+            filterTitle="Filters"
+            filterSubtitle="Fiscal year and leave type"
             filterActive={encashListFilterCount > 0}
             activeFilterCount={encashListFilterCount}
             drawerFields={
-              <>
-                <FilterSelect
+              <div className="space-y-5">
+                <SearchableFilter
                   label="Fiscal year"
                   value={draftFiscalYear}
                   onChange={setDraftFiscalYear}
                   options={fiscalYearFilterOptions}
+                  defaultValue={String(currentYear)}
                 />
-                <FilterSelect
+                <SearchableFilter
                   label="Leave type"
                   value={draftEncashType}
                   onChange={setDraftEncashType}
                   options={leaveTypeOptions}
-                  clearable
                   defaultValue="all"
                 />
-              </>
+              </div>
             }
             onApplyFilters={() => {
               setFiscalYear(Number(draftFiscalYear));
@@ -1418,6 +1201,7 @@ export function LeaveView({ initialTab = "requests" }) {
               setEncashTypeFilter("all");
               setEncashPage(1);
             }}
+            onRefresh={refetch}
             columns={encashColumns}
             rows={filteredEncashRows}
             getRowKey={(row) =>
@@ -1459,7 +1243,7 @@ export function LeaveView({ initialTab = "requests" }) {
               setEncashPage(1);
             }}
           />
-        )}
+        ) : null}
       </Card>
 
       {/* Apply leave slide-over */}
@@ -1671,66 +1455,6 @@ export function LeaveView({ initialTab = "requests" }) {
             </div>
           </div>
         </form>
-      </SlideOver>
-
-      {/* Balance detail */}
-      <SlideOver
-        open={Boolean(balanceDetail)}
-        onClose={() => setBalanceDetail(null)}
-        title={
-          balanceDetail
-            ? leaveTypeName(
-                balanceDetail.leaveTypeId,
-                leaveTypes,
-                [balanceDetail]
-              )
-            : "Leave balance"
-        }
-        subtitle={`FY ${balanceDetail?.fiscalYear ?? fiscalYear}`}
-      >
-        {balanceDetail ? (
-          <div className="space-y-4 pb-6">
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] p-4">
-              <p className="text-[12px] text-[var(--muted)]">Available</p>
-              <p
-                className="mt-1 text-[28px] font-bold tabular-nums"
-                style={{ color: balanceDetail.colorCode || "var(--violet)" }}
-              >
-                {num(balanceDetail.remaining)}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: "Allocated", value: balanceDetail.allocated },
-                { label: "Carry forward", value: balanceDetail.carryForward },
-                { label: "Used", value: balanceDetail.used },
-                { label: "Pending", value: balanceDetail.pending },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-3"
-                >
-                  <p className="text-[11px] text-[var(--muted)]">{item.label}</p>
-                  <p className="mt-1 text-[16px] font-bold tabular-nums text-[var(--text)]">
-                    {num(item.value)}
-                  </p>
-                </div>
-              ))}
-            </div>
-            <Button
-              type="button"
-              className="h-11 w-full rounded-xl"
-              onClick={() => {
-                const typeId = balanceDetail.leaveTypeId;
-                setBalanceDetail(null);
-                openApply(typeId);
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Apply leave
-            </Button>
-          </div>
-        ) : null}
       </SlideOver>
 
       {/* Request detail */}

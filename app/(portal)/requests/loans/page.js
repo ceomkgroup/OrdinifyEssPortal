@@ -1,12 +1,14 @@
 "use client";
 
-import { RequestComingSoon } from "@/components/requests/RequestComingSoon";
+import { LoansView } from "@/components/requests/LoansView";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { ComingSoon } from "@/components/ui/ComingSoon";
 import { PageLoader } from "@/components/ui/Spinner";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 export default function LoansRequestPage() {
   const { canShowRequestTile, loading } = useModules();
+  const { settings } = useCompanySettings();
 
   if (loading) {
     return (
@@ -24,9 +26,10 @@ export default function LoansRequestPage() {
   }
 
   return (
-    <RequestComingSoon
-      title="Loans"
-      description="Apply for employee loan requests."
+    <LoansView
+      timeFormat={settings.timeFormat || "12h"}
+      dateFormat={settings.dateFormat || "DD/MM/YYYY"}
+      currency={settings.currency || "PKR"}
     />
   );
 }

@@ -4,7 +4,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Gift,
   Inbox,
   RefreshCw,
   Sparkles,
@@ -12,13 +11,21 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { FilterSelect } from "@/components/ui/ListFilters";
 import { ListToolbar } from "@/components/ui/ListToolbar";
+import { SearchableFilter } from "@/components/attendance/AttendanceStatusFilter";
 import { MetaBadge } from "@/components/ui/MetaBadge";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
+import { PanelTotalCount } from "@/components/ui/PanelTotalCount";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
 import { useHolidays } from "@/hooks/useHolidays";
+import {
+  readQueryInt,
+  readQueryString,
+  usePersistListQuery,
+  usePortalQuery,
+} from "@/hooks/usePortalQuery";
 import { formatDate } from "@/lib/format";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -92,33 +99,212 @@ function formatPeriod(fromDate, toDate, dateFormat) {
   return `${formatDate(fromDate, dateFormat)} – ${formatDate(toDate, dateFormat)}`;
 }
 
-function StatCard({ label, value, icon: Icon, tone }) {
+
+function buildHolidaysByDate(rows) {
+  const map = new Map();
+  for (const row of rows) {
+    const start = parseLocalDate(row.fromDate);
+    const end = parseLocalDate(row.toDate || row.fromDate);
+    if (!start) continue;
+    const endDate = end && end.getTime() >= start.getTime() ? end : start;
+    const cursor = new Date(start);
+    while (cursor.getTime() <= endDate.getTime()) {
+      const key = toDateKey(cursor);
+      if (key) {
+        if (!map.has(key)) map.set(key, []);
+        const list = map.get(key);
+        if (!list.some((h) => h.occurrenceId === row.occurrenceId && h.holidayId === row.holidayId && h.fromDate === row.fromDate)) {
+          list.push(row);
+        }
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+  return map;
+}
+
+function holidayMetaLine(holiday, dateFormat) {
+  const parts = [
+    formatPeriod(holiday.fromDate, holiday.toDate, dateFormat),
+    holiday.isOptional ? "Optional" : "Mandatory",
+    holiday.typeName || holiday.holidayTypeLabel,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
+function NextHolidayBanner({ holiday, dateFormat }) {
+  if (!holiday) return null;
+  const days = daysUntil(holiday.fromDate);
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--card-shadow)]">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            {label}
-          </p>
-          <p className="mt-1.5 text-[22px] font-bold tabular-nums text-[var(--text)]">
-            {value}
-          </p>
-        </div>
-        <span
-          className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}
-        >
-          <Icon className="h-5 w-5" />
-        </span>
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--violet)]/20 bg-gradient-to-br from-[var(--lavender-soft)]/80 via-[var(--surface)] to-[var(--surface)] px-4 py-3.5">
+      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--surface)] text-[var(--violet)] shadow-sm">
+        <Sparkles className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+          Next holiday
+        </p>
+        <p className="mt-0.5 text-[14px] font-semibold text-[var(--text)]">
+          {holiday.title}
+        </p>
+        <p className="mt-0.5 text-[12px] text-[var(--muted)]">
+          {holidayMetaLine(holiday, dateFormat)}
+        </p>
       </div>
+      <span className="shrink-0 rounded-full bg-[var(--violet)] px-3 py-1 text-[11px] font-semibold text-white">
+        {formatCountdown(days)}
+      </span>
     </div>
   );
 }
 
-function MonthCalendar({ year, month, holidaysByDate, dateFormat }) {
+function CalendarSelect({ label, value, onChange, options, className = "" }) {
+  return (
+    <label className={`block min-w-0 ${className}`}>
+      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] font-semibold text-[var(--text)] outline-none transition focus:border-[var(--violet)]/50"
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function HolidayLogItem({
+  holiday,
+  index,
+  nextHoliday,
+  dateFormat,
+}) {
+  const days = daysUntil(holiday.fromDate);
+  const countdown = formatCountdown(days);
+  const isToday = days === 0;
+  const isUpcoming = days != null && days >= 0;
+  const isPassed = days != null && days < 0;
+  const isNext =
+    nextHoliday &&
+    (nextHoliday.occurrenceId
+      ? nextHoliday.occurrenceId === holiday.occurrenceId
+      : nextHoliday.holidayId === holiday.holidayId &&
+        nextHoliday.fromDate === holiday.fromDate);
+
+  return (
+    <li
+      className={`flex items-start gap-3 rounded-xl border px-3 py-3 ${
+        isNext || isToday
+          ? "border-[var(--violet)]/30 bg-gradient-to-r from-[var(--lavender-soft)]/80 to-[var(--surface)]"
+          : isUpcoming
+            ? "border-[var(--violet)]/15 bg-[var(--lavender-soft)]/35"
+            : isPassed
+              ? "border-[var(--border)] bg-[var(--panel-soft)]/60 opacity-90"
+              : "border-[var(--border)] bg-[var(--surface)]"
+      }`}
+    >
+      <span
+        className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+        style={{
+          backgroundColor: `${holiday.colorCode || "#7c3aed"}22`,
+          color: holiday.colorCode || "#7c3aed",
+        }}
+      >
+        <CalendarDays className="h-4 w-4" />
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="truncate text-[13px] font-semibold text-[var(--text)]">
+            {holiday.title}
+          </p>
+          {holiday.isOptional ? (
+            <span className="rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warning)]">
+              Optional
+            </span>
+          ) : (
+            <span className="rounded-full bg-[var(--success-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--success)]">
+              Mandatory
+            </span>
+          )}
+          {holiday.isRecurring ? (
+            <span className="rounded-full bg-[var(--panel-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
+              Recurring
+            </span>
+          ) : null}
+          {isNext ? (
+            <span className="rounded-full bg-[var(--violet)] px-2 py-0.5 text-[10px] font-semibold text-white">
+              Next
+            </span>
+          ) : null}
+          {isToday ? (
+            <span className="rounded-full bg-[var(--violet)] px-2 py-0.5 text-[10px] font-semibold text-white">
+              Today
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          {holiday.typeName ? (
+            <span className="rounded-full bg-[var(--panel-soft)] px-2 py-0.5 text-[10px] font-semibold capitalize text-[var(--muted)]">
+              {holiday.typeName}
+            </span>
+          ) : null}
+          <span className="text-[12px] text-[var(--muted)]">
+            {formatPeriod(holiday.fromDate, holiday.toDate, dateFormat)}
+          </span>
+        </div>
+        {holiday.description ? (
+          <p className="mt-1 text-[12px] text-[var(--muted)]">
+            {holiday.description}
+          </p>
+        ) : null}
+      </div>
+
+      {countdown ? (
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold tabular-nums ${
+            isToday
+              ? "bg-[var(--violet)] text-white"
+              : isUpcoming
+                ? "bg-[var(--lavender-soft)] text-[var(--violet)]"
+                : "bg-[var(--panel-soft)] text-[var(--muted)]"
+          }`}
+        >
+          {countdown}
+        </span>
+      ) : null}
+    </li>
+  );
+}
+
+function MonthCalendar({
+  year,
+  month,
+  holidaysByDate,
+  dateFormat,
+  selectedDateKey,
+  onSelectDate,
+  onMonthChange,
+  onYearChange,
+  yearOptions,
+  onPrevMonth,
+  onNextMonth,
+}) {
   const first = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const startWeekday = first.getDay();
   const todayKey = toDateKey(new Date());
+
+  const monthOptions = useMemo(
+    () => MONTHS.map((label, index) => ({ value: String(index), label })),
+    []
+  );
 
   const cells = [];
   for (let i = 0; i < startWeekday; i += 1) cells.push(null);
@@ -134,15 +320,60 @@ function MonthCalendar({ year, month, holidaysByDate, dateFormat }) {
   const holidayDays = cells.filter((c) => c?.holidays?.length).length;
 
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--card-shadow)]">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-[14px] font-semibold text-[var(--text)]">
-          {MONTHS[month]} {year}
-        </h3>
-        <span className="text-[11px] text-[var(--muted)]">
-          {holidayDays} holiday{holidayDays === 1 ? "" : "s"}
-        </span>
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--card-shadow)]">
+      <div className="shrink-0 border-b border-[var(--border)] p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="heading-section">Calendar</h3>
+          <div className="flex flex-wrap items-center gap-2 text-[10px] text-[var(--muted)]">
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[var(--violet)]" />
+              Upcoming
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[var(--muted)]" />
+              Passed
+            </span>
+            <span>
+              · {holidayDays} holiday{holidayDays === 1 ? "" : "s"}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+          <CalendarSelect
+            label="Month"
+            value={String(month)}
+            onChange={(value) => onMonthChange(Number(value))}
+            options={monthOptions}
+          />
+          <CalendarSelect
+            label="Year"
+            value={String(year)}
+            onChange={(value) => onYearChange(Number(value))}
+            options={yearOptions}
+          />
+          <div className="flex items-end gap-1">
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--panel-soft)]"
+              onClick={onPrevMonth}
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--panel-soft)]"
+              onClick={onNextMonth}
+              aria-label="Next month"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
 
       <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
         {WEEKDAYS.map((d) => (
@@ -152,60 +383,117 @@ function MonthCalendar({ year, month, holidaysByDate, dateFormat }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-1 overflow-visible">
         {cells.map((cell, index) => {
           if (!cell) return <span key={`e-${index}`} className="min-h-14" />;
           const hasHoliday = cell.holidays.length > 0;
           const isToday = cell.key === todayKey;
-          const color = cell.holidays[0]?.colorCode || "var(--violet)";
+          const primary = cell.holidays[0];
+          const color = primary?.colorCode || "#7b39ec";
+          const days = hasHoliday ? daysUntil(primary.fromDate) : null;
+          const isPassed = days != null && days < 0;
+          const isUpcoming = days != null && days >= 0;
+          const isSelected = cell.key === selectedDateKey;
 
           return (
-            <div
+            <button
+              type="button"
               key={cell.key}
-              title={
-                hasHoliday
-                  ? cell.holidays
-                      .map(
-                        (h) =>
-                          `${h.title} · ${formatDate(h.fromDate, dateFormat)}`
-                      )
-                      .join(", ")
-                  : undefined
-              }
-              className={`min-h-14 rounded-xl border p-1.5 ${
-                hasHoliday
-                  ? "border-transparent"
-                  : isToday
-                    ? "border-[var(--violet)]/30 bg-[var(--lavender-soft)]/40"
-                    : "border-transparent bg-[var(--panel-soft)]/40"
+              onClick={() => onSelectDate?.(cell.key)}
+              className={`group relative min-h-12 rounded-xl border p-1.5 text-left transition ${
+                isSelected
+                  ? "border-[var(--violet)] bg-[var(--lavender-soft)]/60 ring-2 ring-[var(--violet)]/25"
+                  : hasHoliday
+                    ? isPassed
+                      ? "border-[var(--border)] bg-[var(--panel-soft)]/80 opacity-80"
+                      : "border-transparent"
+                    : isToday
+                      ? "border-[var(--violet)]/30 bg-[var(--lavender-soft)]/40"
+                      : "border-transparent bg-[var(--panel-soft)]/40"
               }`}
               style={
-                hasHoliday
+                hasHoliday && !isPassed
                   ? {
                       backgroundColor: `${color}18`,
                       boxShadow: `inset 0 0 0 1px ${color}55`,
                     }
-                  : undefined
+                  : hasHoliday && isPassed
+                    ? { boxShadow: "inset 0 0 0 1px var(--border)" }
+                    : undefined
               }
             >
-              <p
-                className={`text-[11px] font-semibold tabular-nums ${
-                  isToday ? "text-[var(--violet)]" : "text-[var(--muted)]"
-                }`}
-              >
-                {cell.day}
-              </p>
+              <div className="flex items-start justify-between gap-0.5">
+                <p
+                  className={`text-[11px] font-semibold tabular-nums ${
+                    isToday
+                      ? "text-[var(--violet)]"
+                      : hasHoliday && isUpcoming
+                        ? "text-[var(--text)]"
+                        : "text-[var(--muted)]"
+                  }`}
+                >
+                  {cell.day}
+                </p>
+                {hasHoliday ? (
+                  <span
+                    className="mt-0.5 h-2 w-2 shrink-0 rounded-full ring-2 ring-[var(--surface)]"
+                    style={{
+                      backgroundColor: isPassed ? "var(--muted)" : color,
+                    }}
+                    title="Holiday"
+                  />
+                ) : null}
+              </div>
               {hasHoliday ? (
                 <p
-                  className="mt-0.5 truncate text-[10px] font-semibold leading-tight"
-                  style={{ color }}
+                  className={`mt-0.5 truncate text-[10px] font-semibold leading-tight ${
+                    isPassed ? "text-[var(--muted)] line-through decoration-[var(--muted)]/40" : ""
+                  }`}
+                  style={isPassed ? undefined : { color }}
                 >
-                  {cell.holidays[0].title}
+                  {primary.title}
                 </p>
               ) : null}
-            </div>
+
+              {hasHoliday ? (
+                <div className="pointer-events-none absolute left-1/2 top-[calc(100%+6px)] z-30 hidden w-56 -translate-x-1/2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left shadow-[0_12px_32px_rgba(15,23,42,0.14)] group-hover:block">
+                  {cell.holidays.map((h, hi) => {
+                    const hDays = daysUntil(h.fromDate);
+                    const hPassed = hDays != null && hDays < 0;
+                    return (
+                      <div
+                        key={`${h.occurrenceId || h.holidayId || h.title}-${hi}`}
+                        className={hi > 0 ? "mt-2.5 border-t border-[var(--border)] pt-2.5" : ""}
+                      >
+                        <p className="text-[12px] font-semibold text-[var(--text)]">
+                          {h.title}
+                        </p>
+                        <p className="mt-1 text-[11px] text-[var(--muted)]">
+                          {holidayMetaLine(h, dateFormat)}
+                        </p>
+                        {h.description ? (
+                          <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
+                            {h.description}
+                          </p>
+                        ) : null}
+                        <p
+                          className={`mt-1.5 text-[10px] font-semibold ${
+                            hPassed
+                              ? "text-[var(--muted)]"
+                              : "text-[var(--violet)]"
+                          }`}
+                        >
+                          {formatCountdown(hDays) || "—"}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </button>
           );
         })}
+      </div>
       </div>
     </div>
   );
@@ -214,10 +502,25 @@ function MonthCalendar({ year, month, holidaysByDate, dateFormat }) {
 export function HolidaysView({ dateFormat = "DD/MM/YYYY" }) {
   const now = new Date();
   const currentYear = now.getFullYear();
-  const [year, setYear] = useState(currentYear);
-  const [draftYear, setDraftYear] = useState(String(currentYear));
-  const [filter, setFilter] = useState("all"); // all | upcoming | optional | passed
+  const { searchParams } = usePortalQuery();
+  const [year, setYear] = useState(() =>
+    readQueryInt(searchParams, "year", currentYear)
+  );
+  const [draftYear, setDraftYear] = useState(String(year));
+  const [filter, setFilter] = useState(() =>
+    readQueryString(searchParams, "filter", "upcoming")
+  );
+  const [listQuery, setListQuery] = useState(() =>
+    readQueryString(searchParams, "q", "")
+  );
   const [viewMonth, setViewMonth] = useState(now.getMonth());
+  const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(now));
+
+  usePersistListQuery(
+    { year, filter, q: listQuery },
+    { year: String(currentYear), filter: "upcoming", q: "" },
+    [year, filter, listQuery]
+  );
 
   const { rows, total, loading, error, refetch } = useHolidays({ year });
 
@@ -261,14 +564,24 @@ export function HolidaysView({ dateFormat = "DD/MM/YYYY" }) {
   }, [rows, total]);
 
   const filteredRows = useMemo(() => {
+    const q = listQuery.trim().toLowerCase();
     return rows.filter((row) => {
       const days = daysUntil(row.fromDate);
-      if (filter === "upcoming") return days != null && days >= 0;
-      if (filter === "passed") return days != null && days < 0;
-      if (filter === "optional") return row.isOptional;
-      return true;
+      if (filter === "upcoming") {
+        if (!(days != null && days >= 0)) return false;
+      } else if (filter === "passed") {
+        if (!(days != null && days < 0)) return false;
+      } else if (filter === "optional") {
+        if (!row.isOptional) return false;
+      }
+      if (!q) return true;
+      const hay = [row.title, row.description, row.fromDate, formatDate(row.fromDate)]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
     });
-  }, [rows, filter]);
+  }, [rows, filter, listQuery]);
 
   const grouped = useMemo(() => {
     const map = new Map();
@@ -290,16 +603,7 @@ export function HolidaysView({ dateFormat = "DD/MM/YYYY" }) {
     return Array.from(map.values());
   }, [filteredRows, year]);
 
-  const holidaysByDate = useMemo(() => {
-    const map = new Map();
-    for (const row of rows) {
-      const key = row.fromDate;
-      if (!key) continue;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(row);
-    }
-    return map;
-  }, [rows]);
+  const holidaysByDate = useMemo(() => buildHolidaysByDate(rows), [rows]);
 
   const nextHoliday = useMemo(() => {
     return (
@@ -317,8 +621,29 @@ export function HolidaysView({ dateFormat = "DD/MM/YYYY" }) {
     { value: "passed", label: "Passed" },
   ];
 
+  const goPrevMonth = () => {
+    setViewMonth((m) => {
+      if (m === 0) {
+        setYear((y) => y - 1);
+        return 11;
+      }
+      return m - 1;
+    });
+  };
+
+  const goNextMonth = () => {
+    setViewMonth((m) => {
+      if (m === 11) {
+        setYear((y) => y + 1);
+        return 0;
+      }
+      return m + 1;
+    });
+  };
+
   return (
     <PortalPage
+      fill
       title="Company Holidays"
       subtitle="View the official holiday calendar for your company."
       error={error}
@@ -337,86 +662,46 @@ export function HolidaysView({ dateFormat = "DD/MM/YYYY" }) {
         </>
       }
     >
-
-      {nextHoliday ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--violet)]/20 bg-gradient-to-br from-[var(--lavender-soft)]/80 via-[var(--surface)] to-[var(--surface)] px-4 py-3.5">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--surface)] text-[var(--violet)] shadow-sm">
-            <Sparkles className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Next holiday
-            </p>
-            <p className="mt-0.5 text-[14px] font-semibold text-[var(--text)]">
-              {nextHoliday.title}
-            </p>
-            <p className="mt-0.5 text-[12px] text-[var(--muted)]">
-              {formatPeriod(
-                nextHoliday.fromDate,
-                nextHoliday.toDate,
-                dateFormat
-              )}
-              {nextHoliday.holidayTypeLabel
-                ? ` · ${nextHoliday.holidayTypeLabel}`
-                : ""}
-              {nextHoliday.typeName ? ` · ${nextHoliday.typeName}` : ""}
-            </p>
-          </div>
-          <span className="rounded-full bg-[var(--violet)] px-3 py-1 text-[11px] font-semibold text-white">
-            {formatCountdown(daysUntil(nextHoliday.fromDate))}
-          </span>
-        </div>
-      ) : null}
-
-      <CollapsibleSection title="Summary">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard
-            label="Total"
-            value={stats.total}
-            icon={Inbox}
-            tone="bg-[var(--info-soft)] text-[var(--info)]"
-          />
-          <StatCard
-            label="Upcoming"
-            value={stats.upcoming}
-            icon={Sparkles}
-            tone="bg-[var(--lavender-soft)] text-[var(--violet)]"
-          />
-          <StatCard
-            label="Optional"
-            value={stats.optional}
-            icon={Gift}
-            tone="bg-[var(--warning-soft)] text-[var(--warning)]"
-          />
-          <StatCard
-            label="This month"
-            value={stats.thisMonth}
-            icon={CalendarDays}
-            tone="bg-[var(--success-soft)] text-[var(--success)]"
-          />
+      <CollapsibleSection title="Summary" className="shrink-0">
+        <div className={SUMMARY_GRID_CLASS}>
+          <SoftStat label="Total" value={stats.total} />
+          <SoftStat label="Upcoming" value={stats.upcoming} color="#7b39ec" />
+          <SoftStat label="Optional" value={stats.optional} color="#f59e0b" />
+          <SoftStat label="This month" value={stats.thisMonth} color="#22c55e" />
         </div>
       </CollapsibleSection>
 
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card bodyClassName="!min-h-0 !p-0">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-2.5">
-            <h2 className="heading-section">
-              Holiday Logs
-            </h2>
+      <div
+        data-fill-panel=""
+        className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[1.1fr_0.9fr] [&>*]:min-h-0"
+      >
+        <Card
+          className="flex min-h-0 flex-col overflow-hidden !p-0"
+          bodyClassName="!min-h-0 !p-0 flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-2.5">
+            <h2 className="heading-section">Holiday Logs</h2>
+            <PanelTotalCount count={filteredRows.length} />
           </div>
           <ListToolbar
             tabs={FILTERS}
             tab={filter}
             onTabChange={setFilter}
             recordCount={filteredRows.length}
+            search={listQuery}
+            onSearchChange={setListQuery}
+            searchPlaceholder="Search logs…"
+            filterTitle="Filters"
+            filterSubtitle="Calendar year"
             filterActive={yearFilterActive}
             activeFilterCount={yearFilterActive ? 1 : 0}
             drawerFields={
-              <FilterSelect
+              <SearchableFilter
                 label="Calendar year"
                 value={draftYear}
                 onChange={setDraftYear}
                 options={yearFilterOptions}
+                defaultValue={String(currentYear)}
               />
             }
             onApplyFilters={() => {
@@ -426,188 +711,79 @@ export function HolidaysView({ dateFormat = "DD/MM/YYYY" }) {
               setDraftYear(String(currentYear));
               setYear(currentYear);
             }}
+            onRefresh={refetch}
           />
-          <div className="p-4 md:p-5">
-          {loading ? (
-            <PageLoader
-              compact
-              label="Loading holidays"
-              hint="Fetching company holiday calendar…"
-            />
-          ) : filteredRows.length === 0 ? (
-            <div className="flex min-h-[220px] flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] px-4 text-center">
-              <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--lavender-soft)] text-[var(--violet)]">
-                <CalendarDays className="h-6 w-6" />
-              </span>
-              <p className="mt-3 text-[14px] font-semibold text-[var(--text)]">
-                No holidays found
-              </p>
-              <p className="mt-1 max-w-sm text-[12px] text-[var(--muted)]">
-                There are no {filter === "all" ? "" : `${filter} `}holidays for{" "}
-                {year}.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              {grouped.map((group) => (
-                <div key={group.key}>
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                    {MONTHS[group.month]} {group.year}
-                  </p>
-                  <ul className="space-y-2">
-                    {group.items.map((holiday, index) => {
-                      const days = daysUntil(holiday.fromDate);
-                      const countdown = formatCountdown(days);
-                      const isToday = days === 0;
-                      const isUpcoming = days != null && days >= 0;
-
-                      return (
-                        <li
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
+            {loading ? (
+              <PageLoader
+                compact
+                label="Loading holidays"
+                hint="Fetching company holiday calendar…"
+              />
+            ) : filteredRows.length === 0 ? (
+              <div className="flex min-h-[180px] flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] px-4 text-center">
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--lavender-soft)] text-[var(--violet)]">
+                  <Inbox className="h-6 w-6" />
+                </span>
+                <p className="mt-3 text-[14px] font-semibold text-[var(--text)]">
+                  No holidays found
+                </p>
+                <p className="mt-1 max-w-sm text-[12px] text-[var(--muted)]">
+                  There are no {filter === "all" ? "" : `${filter} `}holidays for{" "}
+                  {year}.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {(filter === "all" || filter === "upcoming") && nextHoliday ? (
+                  <NextHolidayBanner
+                    holiday={nextHoliday}
+                    dateFormat={dateFormat}
+                  />
+                ) : null}
+                {grouped.map((group) => (
+                  <div key={group.key}>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      {MONTHS[group.month]} {group.year}
+                    </p>
+                    <ul className="space-y-2">
+                      {group.items.map((holiday, index) => (
+                        <HolidayLogItem
                           key={
                             holiday.occurrenceId ||
                             holiday.holidayId ||
                             `${holiday.title}-${holiday.fromDate}-${index}`
                           }
-                          className={`flex items-start gap-3 rounded-xl border px-3 py-3 ${
-                            isToday
-                              ? "border-[var(--violet)]/30 bg-[var(--lavender-soft)]/70"
-                              : "border-[var(--border)] bg-[var(--surface)]"
-                          }`}
-                        >
-                          <span
-                            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                            style={{
-                              backgroundColor: `${holiday.colorCode || "#7c3aed"}22`,
-                              color: holiday.colorCode || "#7c3aed",
-                            }}
-                          >
-                            <CalendarDays className="h-4 w-4" />
-                          </span>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <p className="truncate text-[13px] font-semibold text-[var(--text)]">
-                                {holiday.title}
-                              </p>
-                              {holiday.isOptional ? (
-                                <span className="rounded-full bg-[var(--warning-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warning)]">
-                                  Optional
-                                </span>
-                              ) : (
-                                <span className="rounded-full bg-[var(--success-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--success)]">
-                                  Mandatory
-                                </span>
-                              )}
-                              {holiday.isRecurring ? (
-                                <span className="rounded-full bg-[var(--panel-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
-                                  Recurring
-                                </span>
-                              ) : null}
-                              {isToday ? (
-                                <span className="rounded-full bg-[var(--violet)] px-2 py-0.5 text-[10px] font-semibold text-white">
-                                  Today
-                                </span>
-                              ) : null}
-                            </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              {holiday.typeName ? (
-                                <span className="rounded-full bg-[var(--panel-soft)] px-2 py-0.5 text-[10px] font-semibold capitalize text-[var(--muted)]">
-                                  {holiday.typeName}
-                                </span>
-                              ) : null}
-                              <span className="text-[12px] text-[var(--muted)]">
-                                {formatPeriod(
-                                  holiday.fromDate,
-                                  holiday.toDate,
-                                  dateFormat
-                                )}
-                              </span>
-                            </div>
-                            {holiday.description ? (
-                              <p className="mt-1 text-[12px] text-[var(--muted)]">
-                                {holiday.description}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          {countdown ? (
-                            <span
-                              className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold tabular-nums ${
-                                isUpcoming
-                                  ? "bg-[var(--lavender-soft)] text-[var(--violet)]"
-                                  : "bg-[var(--panel-soft)] text-[var(--muted)]"
-                              }`}
-                            >
-                              {countdown}
-                            </span>
-                          ) : null}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
+                          holiday={holiday}
+                          index={index}
+                          nextHoliday={nextHoliday}
+                          dateFormat={dateFormat}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </Card>
 
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[13px] font-semibold text-[var(--text)]">
-              Month preview
-            </p>
-            <div className="inline-flex items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1">
-              <button
-                type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--panel-soft)]"
-                onClick={() =>
-                  setViewMonth((m) => {
-                    if (m === 0) {
-                      setYear((y) => y - 1);
-                      return 11;
-                    }
-                    return m - 1;
-                  })
-                }
-                aria-label="Previous month"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--panel-soft)]"
-                onClick={() =>
-                  setViewMonth((m) => {
-                    if (m === 11) {
-                      setYear((y) => y + 1);
-                      return 0;
-                    }
-                    return m + 1;
-                  })
-                }
-                aria-label="Next month"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          <MonthCalendar
-            year={year}
-            month={viewMonth}
-            holidaysByDate={holidaysByDate}
-            dateFormat={dateFormat}
-          />
-
-          <div className="rounded-2xl border border-[var(--violet)]/15 bg-[var(--lavender-soft)]/50 px-4 py-3.5 text-[12px] leading-relaxed text-[var(--muted)]">
-            <p className="font-semibold text-[var(--text)]">Note</p>
-            <p className="mt-1">
-              Holidays marked optional may require leave approval if taken.
-              Mandatory holidays are company offs.
-            </p>
-          </div>
-        </div>
+        <MonthCalendar
+          year={year}
+          month={viewMonth}
+          holidaysByDate={holidaysByDate}
+          dateFormat={dateFormat}
+          selectedDateKey={selectedDateKey}
+          onSelectDate={setSelectedDateKey}
+          onMonthChange={setViewMonth}
+          onYearChange={(nextYear) => {
+            setYear(nextYear);
+            setDraftYear(String(nextYear));
+          }}
+          yearOptions={yearFilterOptions}
+          onPrevMonth={goPrevMonth}
+          onNextMonth={goNextMonth}
+        />
       </div>
     </PortalPage>
   );

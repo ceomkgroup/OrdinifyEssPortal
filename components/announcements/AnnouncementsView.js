@@ -18,11 +18,18 @@ import { Button } from "@/components/ui/Button";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { Avatar } from "@/components/ui/Avatar";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
+import { PanelTotalCount } from "@/components/ui/PanelTotalCount";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { ListToolbar } from "@/components/ui/ListToolbar";
-import { FilterSelect } from "@/components/ui/ListFilters";
+import { SearchableFilter } from "@/components/attendance/AttendanceStatusFilter";
+import {
+  readQueryString,
+  usePersistListQuery,
+  usePortalQuery,
+} from "@/hooks/usePortalQuery";
 import {
   acknowledge,
   clearReaction,
@@ -86,18 +93,6 @@ function renderDescription(text) {
   });
 }
 
-function StatPill({ label, value }) {
-  return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-[var(--card-shadow)]">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-        {label}
-      </p>
-      <p className="mt-1 text-[20px] font-bold tabular-nums text-[var(--text)]">
-        {value}
-      </p>
-    </div>
-  );
-}
 
 function AnnouncementCard({ item, active, onOpen, dateFormat, timeFormat }) {
   return (
@@ -595,11 +590,26 @@ export function AnnouncementsView({
   dateFormat = "DD/MM/YYYY",
   timeFormat = "12h",
 }) {
-  const [category, setCategory] = useState("all");
-  const [listFilter, setListFilter] = useState("all");
+  const { searchParams } = usePortalQuery();
+  const [category, setCategory] = useState(() =>
+    readQueryString(searchParams, "category", "all")
+  );
+  const [draftCategory, setDraftCategory] = useState(category);
+  const [listFilter, setListFilter] = useState(() =>
+    readQueryString(searchParams, "list", "all")
+  );
+  const [listQuery, setListQuery] = useState(() =>
+    readQueryString(searchParams, "q", "")
+  );
   const [selectedId, setSelectedId] = useState(null);
   const [flash, setFlash] = useState(null);
   const [markingAll, setMarkingAll] = useState(false);
+
+  usePersistListQuery(
+    { list: listFilter, category, q: listQuery },
+    { list: "all", category: "all", q: "" },
+    [listFilter, category, listQuery]
+  );
 
   const { rows, meta, loading, error, refetch, unreadCount, pendingAckCount } =
     useAnnouncementsList({
@@ -621,15 +631,40 @@ export function AnnouncementsView({
     return Array.from(set).sort();
   }, [rows]);
 
+  useEffect(() => {
+    setDraftCategory(category);
+  }, [category]);
+
+  const categoryOptions = useMemo(
+    () => [
+      { value: "all", label: "All categories" },
+      ...categories.map((c) => ({
+        value: c,
+        label: categoryLabel(c),
+      })),
+    ],
+    [categories]
+  );
+
   const filtered = useMemo(() => {
+    const q = listQuery.trim().toLowerCase();
     return rows.filter((r) => {
       if (category !== "all" && r.category !== category) return false;
-      if (listFilter === "unread") return !r.isRead;
-      if (listFilter === "pinned") return r.isPinned;
-      if (listFilter === "ack") return r.requireAck && !r.isAcknowledged;
-      return true;
+      if (listFilter === "unread") {
+        if (r.isRead) return false;
+      } else if (listFilter === "pinned") {
+        if (!r.isPinned) return false;
+      } else if (listFilter === "ack") {
+        if (!(r.requireAck && !r.isAcknowledged)) return false;
+      }
+      if (!q) return true;
+      const hay = [r.title, r.summary, r.body, r.category, categoryLabel(r.category)]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
     });
-  }, [rows, listFilter, category]);
+  }, [rows, listFilter, category, listQuery]);
 
   async function handleMarkAllRead() {
     setMarkingAll(true);
@@ -685,13 +720,14 @@ export function AnnouncementsView({
       ) : null}
 
       <CollapsibleSection title="Summary">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatPill label="Total" value={meta?.total ?? rows.length} />
-          <StatPill label="Unread" value={unreadCount} />
-          <StatPill label="Ack pending" value={pendingAckCount} />
-          <StatPill
+        <div className={SUMMARY_GRID_CLASS}>
+          <SoftStat label="Total" value={meta?.total ?? rows.length} />
+          <SoftStat label="Unread" value={unreadCount} color="#7b39ec" />
+          <SoftStat label="Ack pending" value={pendingAckCount} color="#f59e0b" />
+          <SoftStat
             label="Pinned"
             value={rows.filter((r) => r.isPinned).length}
+            color="#3b82f6"
           />
         </div>
       </CollapsibleSection>
@@ -701,32 +737,35 @@ export function AnnouncementsView({
           <h2 className="heading-section">
             Announcement Logs
           </h2>
+          <PanelTotalCount count={filtered.length} />
         </div>
       <ListToolbar
         tabs={LIST_FILTER_TABS}
         tab={listFilter}
         onTabChange={setListFilter}
         recordCount={filtered.length}
+        search={listQuery}
+        onSearchChange={setListQuery}
+        searchPlaceholder="Search logs…"
         filterActive={category !== "all"}
         activeFilterCount={category !== "all" ? 1 : 0}
         filterTitle="Filters"
-        filterSubtitle="Narrow announcements by category"
-        onResetFilters={() => setCategory("all")}
-        onApplyFilters={() => {}}
+        filterSubtitle="Category"
+        onResetFilters={() => {
+          setDraftCategory("all");
+          setCategory("all");
+        }}
+        onApplyFilters={() => {
+          setCategory(draftCategory);
+        }}
+        onRefresh={refetch}
         drawerFields={
-          <FilterSelect
+          <SearchableFilter
             label="Category"
-            value={category}
-            onChange={setCategory}
-            clearable
+            value={draftCategory}
+            onChange={setDraftCategory}
+            options={categoryOptions}
             defaultValue="all"
-            options={[
-              { value: "all", label: "All categories" },
-              ...categories.map((c) => ({
-                value: c,
-                label: categoryLabel(c),
-              })),
-            ]}
           />
         }
       />

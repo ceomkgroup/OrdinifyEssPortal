@@ -54,7 +54,7 @@ export function LeaveBalanceCard({ leave }) {
             )}
           </ChartContainer>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <p className={`text-[18px] font-bold leading-none ${remainingTone}`}>
+            <p className={`text-[16px] font-bold leading-none tabular-nums ${remainingTone}`}>
               {remaining}
             </p>
             <p className="mt-1 text-[11px] text-[var(--muted)]">Remaining</p>

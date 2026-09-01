@@ -8,6 +8,7 @@ import { listOnDutyRequests } from "@/api/on-duty";
 import { listOvertimeRequests } from "@/api/overtime";
 import { listShiftChangeRequests } from "@/api/shift-change";
 import { listWfhRequests } from "@/api/wfh";
+import { listLoansRequests } from "@/api/loans";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { formatDate } from "@/lib/format";
 import { getRequestTypeByKey } from "@/lib/request-types";
@@ -225,6 +226,28 @@ function mapOnDutyRow(row) {
   };
 }
 
+function mapLoanRow(row) {
+  const type = getRequestTypeByKey("loans");
+  const amount = row.approvedAmount ?? row.loanAmount;
+  return {
+    id: `loans:${row.loanId || row.requestId || row.id}`,
+    requestId: row.loanId || row.requestId || row.id,
+    typeKey: "loans",
+    typeLabel: type?.title || "Loans",
+    href: type?.href || "/requests/loans",
+    summary: row.reason
+      ? String(row.reason).slice(0, 72)
+      : amount != null
+        ? `Loan · ${amount}`
+        : "Loan request",
+    period: formatDate(row.startMonth) || "—",
+    status: row.statusLabel || row.status || "—",
+    statusBucket: statusBucket(row.status),
+    createdAt: row.createdAt || row.startMonth || null,
+    reason: row.reason || "",
+  };
+}
+
 /**
  * Aggregates live request types into one list for the All Requests hub.
  */
@@ -245,6 +268,7 @@ export function useAllRequests() {
     if (canShowRequestTile("overtime")) list.push("overtime");
     if (canShowRequestTile("wfh")) list.push("wfh");
     if (canShowRequestTile("onDuty")) list.push("onDuty");
+    if (canShowRequestTile("loans")) list.push("loans");
     return list;
   }, [canShowRequestTile]);
 
@@ -336,6 +360,15 @@ export function useAllRequests() {
               page: 1,
               limit: FETCH_LIMIT,
             }).then((res) => (res.rows || []).map(mapOnDutyRow))
+          );
+        }
+        if (sourceList.includes("loans")) {
+          tasks.push(
+            listLoansRequests({
+              status: "all",
+              page: 1,
+              limit: FETCH_LIMIT,
+            }).then((res) => (res.rows || []).map(mapLoanRow))
           );
         }
 

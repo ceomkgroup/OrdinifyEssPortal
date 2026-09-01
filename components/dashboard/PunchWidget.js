@@ -534,7 +534,7 @@ export function PunchWidget({
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
                 Current
               </p>
-              <p className="mt-1 font-[family-name:var(--font-heading)] text-[20px] font-semibold leading-none text-[var(--text)] tabular-nums md:text-[22px]">
+              <p className="mt-1 text-[16px] font-bold tabular-nums leading-none text-[var(--text)]">
                 {formatClock(now, timeFormat)}
               </p>
             </div>
@@ -542,7 +542,7 @@ export function PunchWidget({
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
                 {breakEnabled ? "Working" : "Worked Today"}
               </p>
-              <p className="mt-1 font-[family-name:var(--font-heading)] text-[20px] font-semibold leading-none text-[var(--violet)] tabular-nums md:text-[22px]">
+              <p className="mt-1 text-[16px] font-bold tabular-nums leading-none text-[var(--violet)]">
                 {formatWorkedTimer(timeStats.workingMinutes)}
               </p>
             </div>
@@ -551,7 +551,7 @@ export function PunchWidget({
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
                   Total
                 </p>
-                <p className="mt-1 font-[family-name:var(--font-heading)] text-[20px] font-semibold leading-none text-[var(--text)] tabular-nums md:text-[22px]">
+                <p className="mt-1 text-[16px] font-bold tabular-nums leading-none text-[var(--text)]">
                   {formatWorkedTimer(timeStats.totalMinutes)}
                 </p>
               </div>
@@ -693,7 +693,7 @@ export function PunchWidget({
                   <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
                     Breaks
                   </p>
-                  <p className="mt-0.5 text-[15px] font-semibold tabular-nums text-[var(--text)]">
+                  <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-[var(--text)]">
                     {breakPolicy?.breaksUsed ?? breakLogs.length}
                     {breakPolicy?.maxBreaks != null
                       ? ` / ${breakPolicy.maxBreaks}`
@@ -704,7 +704,7 @@ export function PunchWidget({
                   <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
                     Minutes
                   </p>
-                  <p className="mt-0.5 text-[15px] font-semibold tabular-nums text-[var(--text)]">
+                  <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-[var(--text)]">
                     {Math.round(timeStats.breakMinutes)}
                     {breakPolicy?.allowedBreakMinutes != null
                       ? ` / ${Math.round(breakPolicy.allowedBreakMinutes)}`

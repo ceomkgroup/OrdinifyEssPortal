@@ -18,10 +18,11 @@ import { useModules } from "@/components/modules/ModulesProvider";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { AttendanceStatusFilter } from "@/components/attendance/AttendanceStatusFilter";
-import { MuiDateRangeFields } from "@/components/ui/MuiDateField";
+import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
 import { MetaBadge } from "@/components/ui/MetaBadge";
 import { PageLoader } from "@/components/ui/Spinner";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { TablePanel } from "@/components/ui/TablePanel";
 import { useAttendancePage } from "@/hooks/useAttendance";
@@ -59,33 +60,6 @@ function pickNumber(...values) {
     if (Number.isFinite(n)) return n;
   }
   return null;
-}
-
-function SoftStat({ label, value, color }) {
-  return (
-    <div
-      className="rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-3"
-      style={
-        color
-          ? {
-              borderColor: `${color}33`,
-              backgroundColor: `${color}14`,
-            }
-          : undefined
-      }
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-        {label}
-      </p>
-      <p
-        className="mt-1 truncate text-[16px] font-bold tabular-nums leading-tight text-[var(--text)]"
-        style={color ? { color } : undefined}
-        title={value != null ? String(value) : undefined}
-      >
-        {value ?? "—"}
-      </p>
-    </div>
-  );
 }
 
 function DateRangeBadge({ from, to, dateFormat = "DD/MM/YYYY", className = "" }) {
@@ -279,7 +253,6 @@ export function AttendanceView() {
   const [draftFrom, setDraftFrom] = useState("");
   const [draftTo, setDraftTo] = useState("");
   const [logsCollapsed, setLogsCollapsed] = useState(false);
-  const [summaryCollapsed, setSummaryCollapsed] = useState(true);
   const [monthRows, setMonthRows] = useState([]);
   const [monthRowsLoading, setMonthRowsLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -698,14 +671,11 @@ export function AttendanceView() {
     >
       <CollapsibleSection
         title={`Monthly Summary (${formatMonthYear(summaryYear, summaryMonth)})`}
-        defaultCollapsed
-        collapsed={summaryCollapsed}
-        onCollapsedChange={setSummaryCollapsed}
       >
         {summaryLoading && !summary ? (
           <p className="text-sm text-[var(--muted)]">Loading summary…</p>
         ) : (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
+          <div className={SUMMARY_GRID_CLASS}>
             <SoftStat label="Total Days" value={summary?.totalDays ?? 0} />
             <SoftStat
               label="Present"
@@ -795,35 +765,14 @@ export function AttendanceView() {
               defaultValue="all"
             />
 
-            <div className="space-y-2.5 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)]/60 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                  Custom date range
-                </p>
-                {draftFrom || draftTo ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraftFrom("");
-                      setDraftTo("");
-                    }}
-                    className="text-[11px] font-medium text-[var(--violet)] hover:underline"
-                  >
-                    Clear dates
-                  </button>
-                ) : null}
-              </div>
-              <MuiDateRangeFields
-                from={draftFrom}
-                to={draftTo}
-                onFromChange={setDraftFrom}
-                onToChange={setDraftTo}
-                clearable
-              />
-              <p className="text-[11px] leading-relaxed text-[var(--muted)]">
-                Apply uses these dates for attendance logs.
-              </p>
-            </div>
+            <FilterDrawerDateRange
+              from={draftFrom}
+              to={draftTo}
+              onFromChange={setDraftFrom}
+              onToChange={setDraftTo}
+              title="Custom date range"
+              hint="Apply uses these dates for attendance logs."
+            />
           </div>
         }
         onApplyFilters={applyFilters}

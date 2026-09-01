@@ -1,24 +1,21 @@
 "use client";
 
 import {
+  Banknote,
   CalendarDays,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Clock3,
   Eye,
-  Hourglass,
   Inbox,
   MoreVertical,
   Plus,
   RefreshCw,
   Send,
+  Wallet,
   X,
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { getAttendanceHistory } from "@/api/attendance";
 import { Button } from "@/components/ui/Button";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
@@ -28,55 +25,37 @@ import { PortalPage } from "@/components/ui/PortalPage";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { TablePanel } from "@/components/ui/TablePanel";
 import {
-  cancelOvertime,
-  submitOvertime,
-  useOvertimeList,
-  useOvertimeStats,
-} from "@/hooks/useOvertime";
+  cancelLoan,
+  submitLoan,
+  useLoansList,
+  useLoansStats,
+} from "@/hooks/useLoans";
 import {
   countActiveDateFilters,
-  dateInRange,
+  rowMatchesDateRange,
 } from "@/lib/request-date-filter";
 import { useRequestListQuery } from "@/hooks/useRequestListQuery";
-import {
-  formatDate,
-  formatDateTime,
-  formatTime,
-  rowSerial,
-} from "@/lib/format";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { formatCurrency, formatDate, formatDateTime, rowSerial } from "@/lib/format";
+import { useModules } from "@/components/modules/ModulesProvider";
+import { ComingSoon } from "@/components/ui/ComingSoon";
+import { PageLoader } from "@/components/ui/Spinner";
 
-const WEEKDAYS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
-
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
+const fieldClass =
+  "mt-1.5 h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]";
 
 function emptyForm() {
   return {
-    logId: "",
-    attendanceDate: "",
-    overtimeMinutes: "90",
+    loanAmount: "",
+    installments: "",
+    startMonth: "",
     reason: "",
   };
+}
+
+function monthInputToStartMonth(value) {
+  if (!value) return "";
+  return `${value}-01`;
 }
 
 function normalizeStatusLabel(status, statusLabel) {
@@ -103,216 +82,18 @@ function statusTone(status) {
   return "border-[var(--border)] bg-[var(--panel-soft)] text-[var(--muted)]";
 }
 
-function formatDateWithWeekday(value, dateFormat) {
-  if (!value) return "—";
-  const key = String(value).match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
-  const d = key ? new Date(`${key}T12:00:00`) : new Date(value);
-  if (Number.isNaN(d.getTime())) return formatDate(value, dateFormat);
-  return `${formatDate(value, dateFormat)} (${WEEKDAYS[d.getDay()]})`;
-}
-
-function formatOtDuration(totalMinutes) {
-  if (totalMinutes == null || Number.isNaN(Number(totalMinutes))) return "—";
-  const mins = Math.max(0, Math.round(Number(totalMinutes)));
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h > 0 && m > 0) return `${h}h ${m}m`;
-  if (h > 0) return `${h}h`;
-  return `${m}m`;
-}
-
-function toDateInputValue(iso) {
-  if (!iso) return "";
-  const match = String(iso).match(/^(\d{4}-\d{2}-\d{2})/);
-  if (match) return match[1];
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function resolveLogId(row) {
-  if (!row) return null;
-  return (
-    row.logId ||
-    row.attendanceLogId ||
-    row.attendanceId ||
-    row.id ||
-    null
-  );
-}
-
-function AttendanceDayPicker({
-  logsByDate,
-  selectedDate,
-  onSelect,
-  dateFormat,
-  loading,
-}) {
-  const rootRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const todayKey = toDateInputValue(new Date().toISOString());
-  const initial = selectedDate
-    ? new Date(`${selectedDate}T12:00:00`)
-    : new Date();
-  const [cursor, setCursor] = useState(
-    () => new Date(initial.getFullYear(), initial.getMonth(), 1)
-  );
-
-  useEffect(() => {
-    if (!selectedDate) return;
-    const d = new Date(`${selectedDate}T12:00:00`);
-    if (Number.isNaN(d.getTime())) return;
-    setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
-  }, [selectedDate]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-
-    function onDocClick(event) {
-      if (rootRef.current?.contains(event.target)) return;
-      setOpen(false);
-    }
-
-    function onKey(event) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    document.addEventListener("mousedown", onDocClick);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startWeekday = new Date(year, month, 1).getDay();
-
-  const cells = [];
-  for (let i = 0; i < startWeekday; i += 1) cells.push(null);
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    cells.push({ day, key, log: logsByDate.get(key) || null });
+function installmentStatusTone(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "paid") {
+    return "border-[var(--success)]/25 bg-[var(--success-soft)] text-[var(--success)]";
   }
-
-  const availableInMonth = cells.filter((c) => c?.log).length;
-
-  function pickDay(key, log) {
-    onSelect?.(key, log);
-    setOpen(false);
+  if (s === "skipped") {
+    return "border-[var(--border)] bg-[var(--panel-soft)] text-[var(--muted)]";
   }
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        disabled={loading}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        onClick={() => setOpen((v) => !v)}
-        className="flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-left text-[13px] text-[var(--text)] outline-none transition hover:border-[var(--violet)]/40 focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)] disabled:opacity-60"
-      >
-        <span className={selectedDate ? "font-medium" : "text-[var(--muted)]"}>
-          {loading
-            ? "Loading attendance days…"
-            : selectedDate
-              ? formatDateWithWeekday(selectedDate, dateFormat)
-              : "Select attendance date"}
-        </span>
-        <CalendarDays className="h-4 w-4 shrink-0 text-[var(--violet)]" />
-      </button>
-
-      {open ? (
-        <div className="absolute left-0 right-0 z-30 mt-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[0_12px_32px_rgba(15,23,42,0.16)]">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-              onClick={() => setCursor(new Date(year, month - 1, 1))}
-              aria-label="Previous month"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <p className="text-[13px] font-semibold text-[var(--text)]">
-              {MONTHS[month]} {year}
-            </p>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-              onClick={() => setCursor(new Date(year, month + 1, 1))}
-              aria-label="Next month"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
-              <span key={d} className="py-1">
-                {d}
-              </span>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-1">
-            {cells.map((cell, index) => {
-              if (!cell) {
-                return <span key={`e-${index}`} className="h-9" />;
-              }
-              const isSelected = cell.key === selectedDate;
-              const isToday = cell.key === todayKey;
-              const hasLog = Boolean(cell.log);
-              const disabled = !hasLog || loading;
-
-              return (
-                <button
-                  key={cell.key}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => pickDay(cell.key, cell.log)}
-                  className={[
-                    "relative h-9 rounded-lg text-[12px] font-semibold transition",
-                    isSelected
-                      ? "bg-[var(--violet)] text-white shadow-sm"
-                      : hasLog
-                        ? "text-[var(--text)] hover:bg-[var(--lavender-soft)]"
-                        : "cursor-not-allowed text-[var(--muted)]/35",
-                    isToday && !isSelected
-                      ? "ring-1 ring-inset ring-[var(--violet)]/40"
-                      : "",
-                  ].join(" ")}
-                >
-                  {cell.day}
-                  {hasLog && !isSelected ? (
-                    <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[var(--violet)]" />
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-3 border-t border-[var(--border)] pt-2.5">
-            {selectedDate ? (
-              <p className="text-[12px] font-medium text-[var(--violet)]">
-                Selected: {formatDateWithWeekday(selectedDate, dateFormat)}
-              </p>
-            ) : (
-              <p className="text-[12px] text-[var(--muted)]">
-                {availableInMonth > 0
-                  ? "Pick a day with attendance (dotted)."
-                  : "No attendance days in this month."}
-              </p>
-            )}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
+  if (s === "pending") {
+    return "border-[var(--warning)]/30 bg-[var(--warning-soft)] text-[var(--warning)]";
+  }
+  return "border-[var(--border)] bg-[var(--panel-soft)] text-[var(--muted)]";
 }
 
 function RequestRowActions({ requestId, canCancel, onView, onCancel }) {
@@ -339,7 +120,7 @@ function RequestRowActions({ requestId, canCancel, onView, onCancel }) {
     function onDocClick(event) {
       if (
         buttonRef.current?.contains(event.target) ||
-        event.target.closest?.(`[data-overtime-menu="${requestId}"]`)
+        event.target.closest?.(`[data-loan-menu="${requestId}"]`)
       ) {
         return;
       }
@@ -379,7 +160,7 @@ function RequestRowActions({ requestId, canCancel, onView, onCancel }) {
       {open && typeof document !== "undefined"
         ? createPortal(
             <div
-              data-overtime-menu={requestId}
+              data-loan-menu={requestId}
               className="fixed z-[9999] w-44 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
               style={{ top: coords.top, left: coords.left }}
             >
@@ -414,7 +195,6 @@ function RequestRowActions({ requestId, canCancel, onView, onCancel }) {
     </>
   );
 }
-
 
 function ApprovalProgress({ currentLevel, totalLevels, levelName, status }) {
   const total = Math.max(1, Number(totalLevels) || 1);
@@ -521,10 +301,68 @@ function DetailField({ icon: Icon, label, children, className = "" }) {
   );
 }
 
-export function OvertimeView({
+function InstallmentSchedule({ installments, currency, dateFormat }) {
+  if (!installments?.length) {
+    return (
+      <p className="text-[13px] text-[var(--muted)]">
+        No installment schedule available.
+      </p>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+      <table className="min-w-full text-left text-[12px]">
+        <thead className="border-b border-[var(--border)] bg-[var(--panel-soft)]/60 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+          <tr>
+            <th className="px-3 py-2.5">#</th>
+            <th className="px-3 py-2.5">Due month</th>
+            <th className="px-3 py-2.5">Amount</th>
+            <th className="px-3 py-2.5">Status</th>
+            <th className="px-3 py-2.5">Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {installments.map((item) => (
+            <tr
+              key={item.installmentId || item.installmentNo}
+              className="border-b border-[var(--border)] last:border-b-0"
+            >
+              <td className="px-3 py-2.5 tabular-nums text-[var(--muted)]">
+                {item.installmentNo ?? "—"}
+              </td>
+              <td className="px-3 py-2.5 whitespace-nowrap">
+                {item.dueMonth ? formatDate(item.dueMonth, dateFormat) : "—"}
+              </td>
+              <td className="px-3 py-2.5 whitespace-nowrap font-semibold">
+                {formatCurrency(item.amount, currency)}
+              </td>
+              <td className="px-3 py-2.5">
+                <span
+                  className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold capitalize ${installmentStatusTone(item.status)}`}
+                >
+                  {item.status || "—"}
+                </span>
+              </td>
+              <td className="max-w-[180px] truncate px-3 py-2.5 text-[var(--muted)]">
+                {item.remarks || "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function LoansView({
   timeFormat = "12h",
   dateFormat = "DD/MM/YYYY",
+  currency = "PKR",
 }) {
+  const { canShowRequestTile, loading: modulesLoading } = useModules();
+  const moduleEnabled = canShowRequestTile("loans");
+
   const {
     status,
     setStatus,
@@ -545,22 +383,22 @@ export function OvertimeView({
   } = useRequestListQuery();
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState(null);
-
   const [form, setForm] = useState(emptyForm);
-  const [historyOptions, setHistoryOptions] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState(null);
   const [formError, setFormError] = useState("");
   const [flash, setFlash] = useState("");
   const [flashTone, setFlashTone] = useState("success");
 
-  const { rows, meta, loading, error, refetch } = useOvertimeList({
+  const { rows, meta, loading, error, refetch } = useLoansList({
     status,
     page,
     limit,
+    enabled: moduleEnabled && !modulesLoading,
   });
-  const { stats, refetch: refetchStats } = useOvertimeStats();
+  const { stats, refetch: refetchStats } = useLoansStats({
+    enabled: moduleEnabled && !modulesLoading,
+  });
 
   const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
 
@@ -568,12 +406,10 @@ export function OvertimeView({
     const q = listQuery.trim().toLowerCase();
     return (rows || []).filter((row) => {
       if (
-        (dateFrom || dateTo) &&
-        !dateInRange(
-          row.attendanceDate || row.createdAt,
-          dateFrom,
-          dateTo
-        )
+        !rowMatchesDateRange(row, dateFrom, dateTo, [
+          "createdAt",
+          "startMonth",
+        ])
       ) {
         return false;
       }
@@ -583,10 +419,9 @@ export function OvertimeView({
         row.status,
         row.statusLabel,
         row.levelName,
-        row.attendanceDate,
-        row.overtimeMinutes != null
-          ? formatOtDuration(row.overtimeMinutes)
-          : "",
+        row.loanAmount,
+        row.approvedAmount,
+        row.startMonth,
       ]
         .filter(Boolean)
         .join(" ")
@@ -595,54 +430,18 @@ export function OvertimeView({
     });
   }, [rows, listQuery, dateFrom, dateTo]);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      setHistoryLoading(true);
-      try {
-        const now = new Date();
-        const fromDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-        const from = `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, "0")}-01`;
-        const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        const res = await getAttendanceHistory({ from, to, page: 1, limit: 90 });
-        if (!alive) return;
-        const options = (res.rows || [])
-          .map((row) => {
-            const logId = resolveLogId(row);
-            if (!logId) return null;
-            return { ...row, logId };
-          })
-          .filter(Boolean);
-        setHistoryOptions(options);
-      } catch {
-        if (alive) setHistoryOptions([]);
-      } finally {
-        if (alive) setHistoryLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const selectedLog = useMemo(
-    () => historyOptions.find((row) => row.logId === form.logId) || null,
-    [historyOptions, form.logId]
-  );
-
-  const logsByDate = useMemo(() => {
-    const map = new Map();
-    for (const row of historyOptions) {
-      const key = toDateInputValue(row.attendanceDate);
-      if (!key) continue;
-      if (!map.has(key)) map.set(key, row);
-    }
-    return map;
-  }, [historyOptions]);
-
   const total = Number(meta?.total) || 0;
   const currentPage = Number(meta?.page) || page;
   const totalPages = Math.max(1, Number(meta?.totalPages) || 1);
+
+  const previewInstallment = useMemo(() => {
+    const amount = Number(form.loanAmount);
+    const count = Number(form.installments);
+    if (!Number.isFinite(amount) || !Number.isFinite(count) || count <= 0) {
+      return null;
+    }
+    return Math.round((amount / count) * 100) / 100;
+  }, [form.loanAmount, form.installments]);
 
   const columns = useMemo(
     () => [
@@ -654,31 +453,43 @@ export function OvertimeView({
         cell: (_row, { index }) => rowSerial(index, currentPage, limit),
       },
       {
-        id: "attendanceDate",
-        header: "Attendance Date",
-        cellClassName: "whitespace-nowrap font-medium text-[var(--text)]",
+        id: "amount",
+        header: "Amount",
+        cellClassName: "whitespace-nowrap font-semibold text-[var(--text)]",
         cell: (row) => (
           <span className="inline-flex items-center gap-1.5">
-            <CalendarDays className="h-3.5 w-3.5 text-[var(--violet)]" />
-            {formatDateWithWeekday(row.attendanceDate, dateFormat)}
+            <Banknote className="h-3.5 w-3.5 text-[var(--violet)]" />
+            {formatCurrency(row.approvedAmount ?? row.loanAmount, currency)}
           </span>
         ),
       },
       {
-        id: "overtime",
-        header: "Overtime",
-        cellClassName: "whitespace-nowrap tabular-nums text-[var(--text)]",
-        cell: (row) => (
-          <span className="inline-flex items-center gap-1.5">
-            <Clock3 className="h-3.5 w-3.5 text-[var(--violet)]" />
-            {formatOtDuration(row.overtimeMinutes)}
-          </span>
-        ),
+        id: "installments",
+        header: "Installments",
+        cellClassName: "whitespace-nowrap text-[var(--muted)]",
+        cell: (row) => {
+          const count =
+            row.installmentCount ||
+            row.installments?.length ||
+            (row.installmentAmount && row.loanAmount
+              ? Math.round(row.loanAmount / row.installmentAmount)
+              : null);
+          return count
+            ? `${count} × ${formatCurrency(row.installmentAmount, currency)}`
+            : "—";
+        },
+      },
+      {
+        id: "startMonth",
+        header: "Start month",
+        cellClassName: "whitespace-nowrap text-[var(--muted)]",
+        cell: (row) =>
+          row.startMonth ? formatDate(row.startMonth, dateFormat) : "—",
       },
       {
         id: "reason",
         header: "Reason",
-        cellClassName: "max-w-[220px] truncate text-[var(--muted)]",
+        cellClassName: "max-w-[200px] truncate text-[var(--muted)]",
         cell: (row) => row.reason || "—",
       },
       {
@@ -704,17 +515,6 @@ export function OvertimeView({
         },
       },
       {
-        id: "level",
-        header: "Level",
-        cellClassName: "whitespace-nowrap text-[var(--muted)]",
-        cell: (row) =>
-          row.currentLevel != null && row.totalLevels != null
-            ? `${row.currentLevel} of ${row.totalLevels}`
-            : row.currentLevel != null
-              ? String(row.currentLevel)
-              : "—",
-      },
-      {
         id: "created",
         header: "Created",
         cellClassName: "whitespace-nowrap text-[var(--muted)]",
@@ -731,18 +531,17 @@ export function OvertimeView({
             String(row.status || "").toLowerCase() === "pending";
           return (
             <RequestRowActions
-              requestId={row.otRequestId}
+              requestId={row.loanId}
               canCancel={isPending}
               onView={() => setSelected(row)}
-              onCancel={() => handleCancel(row.otRequestId)}
+              onCancel={() => handleCancel(row.loanId)}
             />
           );
         },
       },
     ],
-    // handleCancel is stable enough via closure; columns refresh with list state
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currentPage, limit, dateFormat, timeFormat]
+    [currentPage, limit, dateFormat, timeFormat, currency]
   );
 
   function refreshAll() {
@@ -750,64 +549,55 @@ export function OvertimeView({
     refetchStats();
   }
 
-  function onPickAttendanceDay(dateKey, log) {
-    const row = log || logsByDate.get(dateKey);
-    if (!row) {
-      setForm((prev) => ({
-        ...prev,
-        logId: "",
-        attendanceDate: dateKey || "",
-      }));
-      return;
-    }
-    const otHours = Number(row.overtimeHours);
-    let overtimeMinutes = form.overtimeMinutes;
-    if (!Number.isNaN(otHours) && otHours > 0) {
-      overtimeMinutes = String(Math.round(otHours * 60));
-    }
-    setForm((prev) => ({
-      ...prev,
-      logId: row.logId,
-      attendanceDate: toDateInputValue(row.attendanceDate) || dateKey,
-      overtimeMinutes,
-    }));
-  }
-
   async function handleSubmit(event) {
     event.preventDefault();
     setFormError("");
 
-    if (!form.logId || !form.attendanceDate) {
-      setFormError("Please select an attendance day for this overtime.");
+    if (!moduleEnabled) {
+      setFormError("This request module is not enabled for your company.");
       return;
     }
-    const overtimeMinutes = Math.round(Number(form.overtimeMinutes) || 0);
-    if (overtimeMinutes < 1) {
-      setFormError("Enter overtime duration of at least 1 minute.");
+
+    const loanAmount = Number(form.loanAmount);
+    const installments = Number(form.installments);
+    const startMonth = monthInputToStartMonth(form.startMonth);
+
+    if (!Number.isFinite(loanAmount) || loanAmount <= 0) {
+      setFormError("Enter a valid loan amount.");
+      return;
+    }
+    if (!Number.isFinite(installments) || installments <= 0) {
+      setFormError("Enter a valid number of installments.");
+      return;
+    }
+    if (!startMonth) {
+      setFormError("Select a repayment start month.");
       return;
     }
     if (!form.reason.trim()) {
-      setFormError("Please provide a reason for the overtime.");
+      setFormError("Please provide a reason for the loan.");
       return;
     }
 
     setSubmitting(true);
     try {
-      await submitOvertime({
-        attendanceDate: form.attendanceDate,
-        overtimeMinutes,
+      const res = await submitLoan({
+        loanAmount,
+        installments,
+        startMonth,
         reason: form.reason.trim(),
-        logId: form.logId,
       });
       setShowForm(false);
       setForm(emptyForm());
       setFlashTone("success");
-      setFlash("Overtime request submitted for approval.");
+      setFlash(
+        res?.message || "Loan request submitted for approval."
+      );
       setStatus("all");
       setPage(1);
       refreshAll();
     } catch (err) {
-      setFormError(err?.message || "Failed to submit overtime request.");
+      setFormError(getApiErrorMessage(err, "Failed to submit loan request."));
     } finally {
       setSubmitting(false);
     }
@@ -815,28 +605,48 @@ export function OvertimeView({
 
   async function handleCancel(requestId) {
     if (!requestId) return;
-    if (!window.confirm("Cancel this pending overtime request?")) return;
+    if (!moduleEnabled) {
+      setFlashTone("danger");
+      setFlash("This request module is not enabled for your company.");
+      return;
+    }
+    if (!window.confirm("Cancel this pending loan request?")) return;
 
     setCancellingId(requestId);
     try {
-      const res = await cancelOvertime(requestId);
+      const res = await cancelLoan(requestId);
       setFlashTone("success");
-      setFlash(res?.message || "Overtime request cancelled.");
-      if (selected?.otRequestId === requestId) setSelected(null);
+      setFlash(res?.message || "Loan request cancelled.");
+      if (selected?.loanId === requestId) setSelected(null);
       refreshAll();
     } catch (err) {
       setFlashTone("danger");
-      setFlash(err?.message || "Failed to cancel request.");
+      setFlash(getApiErrorMessage(err, "Failed to cancel request."));
     } finally {
       setCancellingId(null);
     }
   }
 
+  if (modulesLoading) {
+    return (
+      <PageLoader label="Loading" hint="Checking loans access…" />
+    );
+  }
+
+  if (!moduleEnabled) {
+    return (
+      <ComingSoon
+        title="Loans"
+        description="This request module is not enabled for your company."
+      />
+    );
+  }
+
   return (
     <PortalPage
       fill
-      title="Overtime"
-      subtitle="Submit and track overtime requests for extra hours worked."
+      title="Loan Requests"
+      subtitle="Apply for employee loans and track repayment schedules."
       actions={
         <>
           <Button
@@ -857,12 +667,11 @@ export function OvertimeView({
             }}
           >
             <Plus className="h-4 w-4" />
-            New Overtime Request
+            New Loan Request
           </Button>
         </>
       }
     >
-
       <CollapsibleSection title="Summary">
         <div className={SUMMARY_GRID_CLASS}>
           <SoftStat label="Total Requests" value={stats.total} />
@@ -882,7 +691,8 @@ export function OvertimeView({
       ) : null}
 
       <TablePanel
-        title="Overtime Logs"
+        fill
+        title="Loan Logs"
         titleCount={total}
         tabs={[
           { value: "all", label: "All" },
@@ -913,7 +723,7 @@ export function OvertimeView({
             to={draftDateTo}
             onFromChange={setDraftDateFrom}
             onToChange={setDraftDateTo}
-            hint="Apply uses these dates for overtime logs."
+            hint="Apply uses these dates for loan logs."
           />
         }
         onApplyFilters={() => {
@@ -931,15 +741,15 @@ export function OvertimeView({
         onRefresh={refreshAll}
         columns={columns}
         rows={filteredRows}
-        getRowKey={(row) => row.otRequestId}
-        minWidth="900px"
+        getRowKey={(row) => row.loanId}
+        minWidth="980px"
         loading={loading}
         loadingLabel="Loading requests"
-        loadingHint="Fetching overtime requests…"
+        loadingHint="Fetching loan requests…"
         error={error}
         emptyIcon={Inbox}
         emptyTitle={`No ${status === "all" ? "" : `${status} `}requests`}
-        emptyHint="Submit a request when you work beyond your scheduled hours."
+        emptyHint="Submit a request when you need a company loan."
         emptyAction={
           <Button
             type="button"
@@ -947,7 +757,7 @@ export function OvertimeView({
             onClick={() => setShowForm(true)}
           >
             <Plus className="h-4 w-4" />
-            New Overtime Request
+            New Loan Request
           </Button>
         }
         page={currentPage}
@@ -973,109 +783,84 @@ export function OvertimeView({
           setShowForm(false);
           setFormError("");
         }}
-        title="New Overtime Request"
-        subtitle="Submit a new overtime request for approval"
+        title="New Loan Request"
+        subtitle="Submit a loan application for approval"
         wide
       >
         <form className="flex min-h-full flex-col pb-6" onSubmit={handleSubmit}>
           <div className="flex-1 space-y-5">
             <div className="flex items-center gap-3">
               <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--lavender-soft)] text-[var(--violet)]">
-                <Clock3 className="h-4 w-4" />
+                <Banknote className="h-4 w-4" />
               </span>
               <div className="min-w-0">
                 <h3 className="text-[15px] font-semibold text-[var(--text)]">
-                  Overtime details
+                  Loan details
                 </h3>
                 <p className="mt-0.5 text-[12px] text-[var(--muted)]">
-                  Date, minutes, and reason for approval
+                  Amount, installments, and repayment start month
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="min-w-0">
                 <label className="block text-[12px] font-semibold text-[var(--text)]">
-                  Select date <span className="text-[var(--danger)]">*</span>
+                  Loan amount ({currency}){" "}
+                  <span className="text-[var(--danger)]">*</span>
                 </label>
-                <div className="mt-1.5">
-                  <AttendanceDayPicker
-                    logsByDate={logsByDate}
-                    selectedDate={form.attendanceDate}
-                    onSelect={onPickAttendanceDay}
-                    dateFormat={dateFormat}
-                    loading={historyLoading}
-                  />
-                </div>
-                <p className="mt-1.5 text-[11px] leading-snug text-[var(--muted)]">
-                  Attendance date with a recorded work log
-                </p>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  step="1"
+                  placeholder="50000"
+                  className={fieldClass}
+                  value={form.loanAmount}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, loanAmount: e.target.value }))
+                  }
+                />
               </div>
 
               <div className="min-w-0">
                 <label className="block text-[12px] font-semibold text-[var(--text)]">
-                  Overtime minutes{" "}
-                  <span className="text-[var(--danger)]">*</span>
+                  Installments <span className="text-[var(--danger)]">*</span>
                 </label>
-                <div className="relative mt-1.5">
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    step="1"
-                    placeholder="Enter overtime minutes"
-                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 pr-[4.25rem] text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]"
-                    value={form.overtimeMinutes}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        overtimeMinutes: e.target.value,
-                      }))
-                    }
-                  />
-                  <span className="pointer-events-none absolute inset-y-[1px] right-[1px] flex w-14 items-center justify-center rounded-r-[11px] bg-[var(--panel-soft)] text-[12px] font-semibold text-[var(--muted)]">
-                    Mins
-                  </span>
-                </div>
-                <p className="mt-1.5 text-[11px] leading-snug text-[var(--muted)]">
-                  Enter total minutes of overtime worked
-                  {Number(form.overtimeMinutes) > 0
-                    ? ` · ${formatOtDuration(form.overtimeMinutes)}`
-                    : ""}
-                </p>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  step="1"
+                  placeholder="12"
+                  className={fieldClass}
+                  value={form.installments}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      installments: e.target.value,
+                    }))
+                  }
+                />
               </div>
 
               <div className="min-w-0 sm:col-span-2">
-                <p className="text-[12px] font-semibold text-[var(--text)]">
-                  Work log
-                </p>
-                <div className="mt-1.5 flex min-h-11 items-center rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5">
-                  {selectedLog ? (
-                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px]">
-                      <span className="font-semibold text-[var(--text)]">
-                        {formatDateWithWeekday(form.attendanceDate, dateFormat)}
-                      </span>
-                      {selectedLog.checkInTime || selectedLog.checkOutTime ? (
-                        <span className="text-[var(--muted)]">
-                          ·{" "}
-                          {formatTime(selectedLog.checkInTime, timeFormat)} →{" "}
-                          {formatTime(selectedLog.checkOutTime, timeFormat)}
-                        </span>
-                      ) : (
-                        <span className="text-[var(--muted)]">
-                          · Attendance log linked
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-[13px] text-[var(--muted)]">
-                      Auto-selected from attendance
-                    </p>
-                  )}
-                </div>
-                <p className="mt-1.5 text-[11px] leading-snug text-[var(--muted)]">
-                  Work log will be linked from your attendance
-                </p>
+                <label className="block text-[12px] font-semibold text-[var(--text)]">
+                  Repayment start month{" "}
+                  <span className="text-[var(--danger)]">*</span>
+                </label>
+                <input
+                  type="month"
+                  required
+                  className={fieldClass}
+                  value={form.startMonth}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      startMonth: e.target.value,
+                    }))
+                  }
+                />
               </div>
 
               <div className="min-w-0 sm:col-span-2">
@@ -1085,7 +870,7 @@ export function OvertimeView({
                 <textarea
                   required
                   rows={4}
-                  placeholder="Enter reason for overtime"
+                  placeholder="Enter reason for loan request"
                   className="mt-1.5 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]"
                   value={form.reason}
                   onChange={(e) =>
@@ -1093,7 +878,10 @@ export function OvertimeView({
                   }
                 />
                 <p className="mt-1.5 text-[11px] leading-snug text-[var(--muted)]">
-                  Provide a valid reason for overtime request
+                  {previewInstallment != null
+                    ? `Estimated installment: ${formatCurrency(previewInstallment, currency)} · `
+                    : ""}
+                  You can only have one active or pending loan at a time.
                 </p>
               </div>
             </div>
@@ -1139,21 +927,16 @@ export function OvertimeView({
       <SlideOver
         open={Boolean(selected)}
         onClose={() => setSelected(null)}
-        title="Overtime details"
+        title="Loan details"
         subtitle={
           selected
-            ? [
-                selected.attendanceDate
-                  ? formatDateWithWeekday(selected.attendanceDate, dateFormat)
-                  : null,
-                selected.overtimeMinutes != null
-                  ? formatOtDuration(selected.overtimeMinutes)
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(" · ") || undefined
+            ? formatCurrency(
+                selected.approvedAmount ?? selected.loanAmount,
+                currency
+              )
             : undefined
         }
+        wide
       >
         {selected ? (
           <div className="space-y-4 pb-8">
@@ -1186,11 +969,11 @@ export function OvertimeView({
                   type="button"
                   variant="outline"
                   className="h-9 rounded-xl text-[var(--danger)]"
-                  disabled={cancellingId === selected.otRequestId}
-                  onClick={() => handleCancel(selected.otRequestId)}
+                  disabled={cancellingId === selected.loanId}
+                  onClick={() => handleCancel(selected.loanId)}
                 >
                   <XCircle className="h-4 w-4" />
-                  {cancellingId === selected.otRequestId
+                  {cancellingId === selected.loanId
                     ? "Cancelling…"
                     : "Cancel request"}
                 </Button>
@@ -1208,17 +991,27 @@ export function OvertimeView({
               </div>
 
               <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
-                <DetailField icon={CalendarDays} label="Attendance date">
-                  {formatDateWithWeekday(selected.attendanceDate, dateFormat)}
+                <DetailField icon={Wallet} label="Requested amount">
+                  {formatCurrency(selected.loanAmount, currency)}
                 </DetailField>
-
-                <DetailField icon={Clock3} label="Overtime">
-                  <span className="tabular-nums">
-                    {formatOtDuration(selected.overtimeMinutes)}
-                  </span>
+                <DetailField icon={Wallet} label="Approved amount">
+                  {formatCurrency(selected.approvedAmount, currency)}
                 </DetailField>
-
-                <DetailField icon={Clock3} label="Submitted" className="sm:col-span-2">
+                <DetailField label="Installment amount">
+                  {formatCurrency(selected.installmentAmount, currency)}
+                </DetailField>
+                <DetailField icon={CalendarDays} label="Start month">
+                  {selected.startMonth
+                    ? formatDate(selected.startMonth, dateFormat)
+                    : "—"}
+                </DetailField>
+                <DetailField label="Total paid">
+                  {formatCurrency(selected.totalPaid, currency)}
+                </DetailField>
+                <DetailField label="Total pending">
+                  {formatCurrency(selected.totalPending, currency)}
+                </DetailField>
+                <DetailField label="Submitted">
                   {selected.createdAt
                     ? formatDateTime(
                         selected.createdAt,
@@ -1227,13 +1020,28 @@ export function OvertimeView({
                       )
                     : "—"}
                 </DetailField>
-
                 <DetailField label="Reason" className="sm:col-span-2">
                   <p className="whitespace-pre-wrap font-normal leading-relaxed text-[var(--text)]">
                     {selected.reason || "—"}
                   </p>
                 </DetailField>
               </dl>
+            </section>
+
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--card-shadow)]">
+              <div className="mb-4 border-b border-[var(--border)] pb-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  Repayment
+                </p>
+                <h3 className="mt-0.5 text-[15px] font-semibold text-[var(--text)]">
+                  Installment schedule
+                </h3>
+              </div>
+              <InstallmentSchedule
+                installments={selected.installments}
+                currency={currency}
+                dateFormat={dateFormat}
+              />
             </section>
 
             <ApprovalProgress

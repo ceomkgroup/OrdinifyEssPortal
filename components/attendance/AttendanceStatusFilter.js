@@ -159,3 +159,6 @@ export function AttendanceStatusFilter({
     </div>
   );
 }
+
+/** Generic searchable list filter (same UI as attendance status filter). */
+export { AttendanceStatusFilter as SearchableFilter };

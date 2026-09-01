@@ -29,7 +29,7 @@ export function LastPayslipBar({ lastPayslip, dateFormat }) {
             <Field
               label="Net Salary"
               value={formatCurrency(lastPayslip.netSalary, currency)}
-              valueClass="text-[15px] font-bold text-[var(--success)]"
+              valueClass="text-[16px] font-bold text-[var(--success)]"
             />
             <Field
               label="Gross Salary"

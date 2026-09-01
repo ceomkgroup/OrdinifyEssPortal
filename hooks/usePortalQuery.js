@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 function normalizeQuery(qs) {
@@ -55,3 +55,21 @@ export function readQueryString(searchParams, key, fallback = "") {
   const raw = searchParams?.get(key);
   return raw != null && raw !== "" ? raw : fallback;
 }
+
+/** Sync list filter/search state to URL (survives refresh). */
+export function usePersistListQuery(patch, defaults, deps) {
+  const { replaceQuery } = usePortalQuery();
+  useEffect(() => {
+    replaceQuery(patch, defaults);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replaceQuery, ...deps]);
+}
+
+export const REQUEST_LIST_QUERY_DEFAULTS = {
+  status: "all",
+  q: "",
+  from: "",
+  to: "",
+  page: "1",
+  limit: "10",
+};

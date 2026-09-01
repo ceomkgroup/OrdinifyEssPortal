@@ -18,8 +18,9 @@ import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { FlashBanner } from "@/components/ui/FlashBanner";
-import { FilterDate } from "@/components/ui/ListFilters";
+import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { PageLoader } from "@/components/ui/Spinner";
@@ -36,32 +37,12 @@ import {
   countActiveDateFilters,
   dateInRange,
 } from "@/lib/request-date-filter";
+import { useRequestListQuery } from "@/hooks/useRequestListQuery";
 import { formatDate, formatDateTime, formatTime, rowSerial } from "@/lib/format";
 
 const fieldClass =
   "mt-1.5 h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]";
 
-function StatCard({ label, value, icon: Icon, tone }) {
-  return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--card-shadow)]">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            {label}
-          </p>
-          <p className="mt-1.5 text-[22px] font-bold tabular-nums text-[var(--text)]">
-            {value}
-          </p>
-        </div>
-        <span
-          className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}
-        >
-          <Icon className="h-5 w-5" />
-        </span>
-      </div>
-    </div>
-  );
-}
 
 function statusTone(status) {
   const s = String(status || "").toLowerCase();
@@ -431,16 +412,26 @@ export function AttendanceChangeView({
   const searchParams = useSearchParams();
   const prefillLogId = searchParams?.get("logId") || "";
 
-  const [status, setStatus] = useState("all");
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const {
+    status,
+    setStatus,
+    page,
+    setPage,
+    limit,
+    setLimit,
+    listQuery,
+    setListQuery,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    draftDateFrom,
+    setDraftDateFrom,
+    draftDateTo,
+    setDraftDateTo,
+  } = useRequestListQuery();
   const [selectedId, setSelectedId] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [listQuery, setListQuery] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [draftDateFrom, setDraftDateFrom] = useState("");
-  const [draftDateTo, setDraftDateTo] = useState("");
 
   const [form, setForm] = useState(emptyForm);
   const [historyOptions, setHistoryOptions] = useState([]);
@@ -455,11 +446,6 @@ export function AttendanceChangeView({
     limit,
   });
   const { stats, refetch: refetchStats } = useAttendanceChangeStats();
-
-  useEffect(() => {
-    setDraftDateFrom(dateFrom);
-    setDraftDateTo(dateTo);
-  }, [dateFrom, dateTo]);
 
   const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
 
@@ -748,32 +734,12 @@ export function AttendanceChangeView({
     >
 
       <CollapsibleSection title="Summary">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          label="Total Requests"
-          value={stats.total}
-          icon={Inbox}
-          tone="bg-[var(--info-soft)] text-[var(--info)]"
-        />
-        <StatCard
-          label="Pending"
-          value={stats.pending}
-          icon={Hourglass}
-          tone="bg-[var(--lavender-soft)] text-[var(--violet)]"
-        />
-        <StatCard
-          label="Approved"
-          value={stats.approved}
-          icon={CheckCircle2}
-          tone="bg-[var(--success-soft)] text-[var(--success)]"
-        />
-        <StatCard
-          label="Cancelled"
-          value={stats.cancelled}
-          icon={XCircle}
-          tone="bg-[var(--danger-soft)] text-[var(--danger)]"
-        />
-      </div>
+        <div className={SUMMARY_GRID_CLASS}>
+          <SoftStat label="Total Requests" value={stats.total} />
+          <SoftStat label="Pending" value={stats.pending} color="#7b39ec" />
+          <SoftStat label="Approved" value={stats.approved} color="#22c55e" />
+          <SoftStat label="Cancelled" value={stats.cancelled} color="#ef4444" />
+        </div>
       </CollapsibleSection>
 
       {formSuccess ? (
@@ -787,6 +753,7 @@ export function AttendanceChangeView({
 
       <TablePanel
         title="Attendance Change Logs"
+        titleCount={total}
         tabs={[
           { value: "all", label: "All" },
           { value: "pending", label: "Pending" },
@@ -806,26 +773,19 @@ export function AttendanceChangeView({
         }
         search={listQuery}
         onSearchChange={setListQuery}
-        searchPlaceholder="Search date, reason, status…"
+        searchPlaceholder="Search logs…"
+        filterTitle="Filters"
+        filterSubtitle="Date range"
         filterActive={dateFilterCount > 0}
         activeFilterCount={dateFilterCount}
         drawerFields={
-          <>
-            <FilterDate
-              label="From date"
-              value={draftDateFrom}
-              onChange={setDraftDateFrom}
-              max={draftDateTo || undefined}
-              clearable
-            />
-            <FilterDate
-              label="To date"
-              value={draftDateTo}
-              onChange={setDraftDateTo}
-              min={draftDateFrom || undefined}
-              clearable
-            />
-          </>
+          <FilterDrawerDateRange
+            from={draftDateFrom}
+            to={draftDateTo}
+            onFromChange={setDraftDateFrom}
+            onToChange={setDraftDateTo}
+            hint="Apply uses these dates for attendance change logs."
+          />
         }
         onApplyFilters={() => {
           setDateFrom(draftDateFrom);

@@ -5,12 +5,12 @@ import { ChevronDown } from "lucide-react";
 
 /**
  * Attendance Logs-style collapsible block (title + chevron).
- * Closed by default so pages stay short.
+ * Open by default for summary sections.
  */
 export function CollapsibleSection({
   title,
   extra,
-  defaultCollapsed = true,
+  defaultCollapsed = false,
   collapsed: collapsedControlled,
   onCollapsedChange,
   children,

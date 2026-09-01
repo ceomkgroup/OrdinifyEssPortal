@@ -18,8 +18,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { FlashBanner } from "@/components/ui/FlashBanner";
-import { FilterDate } from "@/components/ui/ListFilters";
+import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { TablePanel } from "@/components/ui/TablePanel";
@@ -33,6 +34,7 @@ import {
   countActiveDateFilters,
   rowMatchesDateRange,
 } from "@/lib/request-date-filter";
+import { useRequestListQuery } from "@/hooks/useRequestListQuery";
 import { formatDate, formatDateTime, rowSerial } from "@/lib/format";
 
 const fieldClass =
@@ -208,27 +210,6 @@ function RequestRowActions({ requestId, canCancel, onView, onCancel }) {
   );
 }
 
-function StatCard({ label, value, icon: Icon, tone }) {
-  return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--card-shadow)]">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            {label}
-          </p>
-          <p className="mt-1.5 text-[22px] font-bold tabular-nums text-[var(--text)]">
-            {value}
-          </p>
-        </div>
-        <span
-          className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}
-        >
-          <Icon className="h-5 w-5" />
-        </span>
-      </div>
-    </div>
-  );
-}
 
 function ApprovalProgress({ currentLevel, totalLevels, levelName, status }) {
   const total = Math.max(1, Number(totalLevels) || 1);
@@ -336,14 +317,24 @@ function DetailField({ icon: Icon, label, children, className = "" }) {
 }
 
 export function WfhView({ timeFormat = "12h", dateFormat = "DD/MM/YYYY" }) {
-  const [status, setStatus] = useState("all");
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
-  const [listQuery, setListQuery] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [draftDateFrom, setDraftDateFrom] = useState("");
-  const [draftDateTo, setDraftDateTo] = useState("");
+  const {
+    status,
+    setStatus,
+    page,
+    setPage,
+    limit,
+    setLimit,
+    listQuery,
+    setListQuery,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    draftDateFrom,
+    setDraftDateFrom,
+    draftDateTo,
+    setDraftDateTo,
+  } = useRequestListQuery();
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState(null);
 
@@ -360,11 +351,6 @@ export function WfhView({ timeFormat = "12h", dateFormat = "DD/MM/YYYY" }) {
     limit,
   });
   const { stats, refetch: refetchStats } = useWfhStats();
-
-  useEffect(() => {
-    setDraftDateFrom(dateFrom);
-    setDraftDateTo(dateTo);
-  }, [dateFrom, dateTo]);
 
   const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
 
@@ -579,32 +565,12 @@ export function WfhView({ timeFormat = "12h", dateFormat = "DD/MM/YYYY" }) {
     >
 
       <CollapsibleSection title="Summary">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          label="Total Requests"
-          value={stats.total}
-          icon={Inbox}
-          tone="bg-[var(--info-soft)] text-[var(--info)]"
-        />
-        <StatCard
-          label="Pending"
-          value={stats.pending}
-          icon={Hourglass}
-          tone="bg-[var(--lavender-soft)] text-[var(--violet)]"
-        />
-        <StatCard
-          label="Approved"
-          value={stats.approved}
-          icon={CheckCircle2}
-          tone="bg-[var(--success-soft)] text-[var(--success)]"
-        />
-        <StatCard
-          label="Cancelled"
-          value={stats.cancelled}
-          icon={XCircle}
-          tone="bg-[var(--danger-soft)] text-[var(--danger)]"
-        />
-      </div>
+        <div className={SUMMARY_GRID_CLASS}>
+          <SoftStat label="Total Requests" value={stats.total} />
+          <SoftStat label="Pending" value={stats.pending} color="#7b39ec" />
+          <SoftStat label="Approved" value={stats.approved} color="#22c55e" />
+          <SoftStat label="Cancelled" value={stats.cancelled} color="#ef4444" />
+        </div>
       </CollapsibleSection>
 
       {flash ? (
@@ -618,6 +584,7 @@ export function WfhView({ timeFormat = "12h", dateFormat = "DD/MM/YYYY" }) {
 
       <TablePanel
         title="WFH Logs"
+        titleCount={total}
         tabs={[
           { value: "all", label: "All" },
           { value: "pending", label: "Pending" },
@@ -636,26 +603,19 @@ export function WfhView({ timeFormat = "12h", dateFormat = "DD/MM/YYYY" }) {
         }
         search={listQuery}
         onSearchChange={setListQuery}
-        searchPlaceholder="Search period, reason, status…"
+        searchPlaceholder="Search logs…"
+        filterTitle="Filters"
+        filterSubtitle="Date range"
         filterActive={dateFilterCount > 0}
         activeFilterCount={dateFilterCount}
         drawerFields={
-          <>
-            <FilterDate
-              label="From date"
-              value={draftDateFrom}
-              onChange={setDraftDateFrom}
-              max={draftDateTo || undefined}
-              clearable
-            />
-            <FilterDate
-              label="To date"
-              value={draftDateTo}
-              onChange={setDraftDateTo}
-              min={draftDateFrom || undefined}
-              clearable
-            />
-          </>
+          <FilterDrawerDateRange
+            from={draftDateFrom}
+            to={draftDateTo}
+            onFromChange={setDraftDateFrom}
+            onToChange={setDraftDateTo}
+            hint="Apply uses these dates for WFH logs."
+          />
         }
         onApplyFilters={() => {
           setDateFrom(draftDateFrom);

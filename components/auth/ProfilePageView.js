@@ -418,7 +418,6 @@ export function ProfilePageView() {
           </Button>
         ) : null}
       </div>
-
       {error ? (
         <FlashBanner
           message={error}
@@ -543,7 +542,7 @@ export function ProfilePageView() {
       </Card>
 
       {/* Tabs */}
-      <div className="flex gap-1 overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--card-shadow)]">
+      <div className="grid grid-cols-1 gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--card-shadow)] sm:grid-cols-3">
         {TABS.map((item) => {
           const active = tab === item.id;
           return (
@@ -555,10 +554,11 @@ export function ProfilePageView() {
                 setError("");
                 setTab(item.id);
               }}
-              className={`min-w-[120px] flex-1 rounded-lg px-3 py-2.5 text-[13px] font-semibold transition ${active
-                ? "bg-[var(--violet)] text-white"
-                : "text-[var(--muted)] hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-                }`}
+              className={`rounded-lg px-3 py-2.5 text-[13px] font-semibold transition ${
+                active
+                  ? "bg-[var(--violet)] text-white"
+                  : "text-[var(--muted)] hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
+              }`}
             >
               {item.label}
             </button>
