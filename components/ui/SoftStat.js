@@ -29,4 +29,4 @@ export function SoftStat({ label, value, color }) {
 }
 
 export const SUMMARY_GRID_CLASS =
-  "grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5";
+  "grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";

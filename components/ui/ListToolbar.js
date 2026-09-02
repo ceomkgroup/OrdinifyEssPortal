@@ -50,13 +50,8 @@ export function ListToolbar({
     }
   }, [searchOpen]);
 
-  const tabItems =
-    Array.isArray(tabs) && tabs.length
-      ? tabs
-      : REQUEST_STATUS_OPTIONS.map((o) => ({
-        value: o.value,
-        label: o.value === "all" ? "All" : o.label.split(" / ")[0],
-      }));
+  const tabItems = Array.isArray(tabs) && tabs.length > 0 ? tabs : [];
+  const showTabs = tabItems.length > 0;
 
   const hasSearch = Boolean(String(draft || "").trim());
   const showSearch = typeof onSearchChange === "function";
@@ -101,23 +96,25 @@ export function ListToolbar({
         className={`flex min-w-0 items-center gap-2 border-b border-[var(--border)] px-4 py-1.5 ${className}`}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {tabItems.map((item) => {
-            const active = tab === item.value;
-            return (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => onTabChange?.(item.value)}
-                className={`shrink-0 whitespace-nowrap rounded-md border px-2.5 py-1 text-[12px] font-medium leading-none transition ${
-                  active
-                    ? "border-[var(--violet)] bg-[var(--lavender-soft)] text-[var(--violet)]"
-                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--violet)]/40 hover:text-[var(--text)]"
-                }`}
-              >
-                {item.label}
-              </button>
-            );
-          })}
+          {showTabs
+            ? tabItems.map((item) => {
+                const active = tab === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => onTabChange?.(item.value)}
+                    className={`shrink-0 whitespace-nowrap rounded-md border px-2.5 py-1 text-[12px] font-medium leading-none transition ${
+                      active
+                        ? "border-[var(--violet)] bg-[var(--lavender-soft)] text-[var(--violet)]"
+                        : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--violet)]/40 hover:text-[var(--text)]"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })
+            : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">

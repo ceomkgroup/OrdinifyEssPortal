@@ -26,6 +26,7 @@ export function TablePanel({
   title,
   subtitle,
   titleCount,
+  titleCountLabel = "Total requests",
   headerExtra,
   collapsible = false,
   defaultCollapsed = false,
@@ -113,8 +114,8 @@ export function TablePanel({
       } ${className}`}
     >
       {(title || titleCount != null || headerExtra || collapsible) && (
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-2.5">
-          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2 sm:gap-3 sm:px-5 sm:py-2.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-2.5">
             {title ? (
               <div className="min-w-0">
                 <h2 className="heading-section">
@@ -130,7 +131,9 @@ export function TablePanel({
             {headerExtra}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {titleCount != null ? <PanelTotalCount count={titleCount} /> : null}
+            {titleCount != null ? (
+              <PanelTotalCount count={titleCount} label={titleCountLabel} />
+            ) : null}
             {collapsible ? (
             <button
               type="button"

@@ -9,6 +9,7 @@ import { listOvertimeRequests } from "@/api/overtime";
 import { listShiftChangeRequests } from "@/api/shift-change";
 import { listWfhRequests } from "@/api/wfh";
 import { listLoansRequests } from "@/api/loans";
+import { listAdvancesRequests } from "@/api/advances";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { formatDate } from "@/lib/format";
 import { getRequestTypeByKey } from "@/lib/request-types";
@@ -248,6 +249,27 @@ function mapLoanRow(row) {
   };
 }
 
+function mapAdvanceRow(row) {
+  const type = getRequestTypeByKey("advances");
+  return {
+    id: `advances:${row.advanceId || row.requestId || row.id}`,
+    requestId: row.advanceId || row.requestId || row.id,
+    typeKey: "advances",
+    typeLabel: type?.title || "Advances",
+    href: type?.href || "/requests/advances",
+    summary: row.reason
+      ? String(row.reason).slice(0, 72)
+      : row.amount != null
+        ? `Advance · ${row.amount}`
+        : "Advance request",
+    period: formatDate(row.requestDate) || "—",
+    status: row.statusLabel || row.status || "—",
+    statusBucket: statusBucket(row.status),
+    createdAt: row.createdAt || row.requestDate || null,
+    reason: row.reason || "",
+  };
+}
+
 /**
  * Aggregates live request types into one list for the All Requests hub.
  */
@@ -269,6 +291,7 @@ export function useAllRequests() {
     if (canShowRequestTile("wfh")) list.push("wfh");
     if (canShowRequestTile("onDuty")) list.push("onDuty");
     if (canShowRequestTile("loans")) list.push("loans");
+    if (canShowRequestTile("advances")) list.push("advances");
     return list;
   }, [canShowRequestTile]);
 
@@ -369,6 +392,15 @@ export function useAllRequests() {
               page: 1,
               limit: FETCH_LIMIT,
             }).then((res) => (res.rows || []).map(mapLoanRow))
+          );
+        }
+        if (sourceList.includes("advances")) {
+          tasks.push(
+            listAdvancesRequests({
+              status: "all",
+              page: 1,
+              limit: FETCH_LIMIT,
+            }).then((res) => (res.rows || []).map(mapAdvanceRow))
           );
         }
 

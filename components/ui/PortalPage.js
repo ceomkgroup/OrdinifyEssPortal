@@ -22,9 +22,10 @@ export function PortalPage({
 }) {
   return (
     <div
-      className={`flex w-full flex-col gap-5 ${
+      {...(fill ? { "data-portal-fill": "" } : {})}
+      className={`flex w-full flex-col gap-3 sm:gap-4 md:gap-5 ${
         fill
-          ? "h-full min-h-0 flex-1 overflow-hidden [&>*]:shrink-0 [&>[data-fill-panel]]:min-h-[180px] [&>[data-fill-panel]]:flex-1 [&>[data-fill-panel]]:shrink"
+          ? "h-full min-h-0 flex-1 overflow-hidden [&>*]:shrink-0 [&>[data-fill-panel]]:min-h-[160px] [&>[data-fill-panel]]:flex-1 [&>[data-fill-panel]]:shrink"
           : ""
       } ${className}`}
     >

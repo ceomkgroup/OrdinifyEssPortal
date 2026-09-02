@@ -13,6 +13,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import {
   canAccessRoute,
   canShowRequestTile,
+  canShowDocumentTile,
   canShowWidget,
   hasAnyScreen,
   hasFlag,
@@ -112,6 +113,7 @@ export function ModulesProvider({ children }) {
       canAccessRoute: (href) => canAccessRoute(modules, href),
       canShowWidget: (key) => canShowWidget(modules, key),
       canShowRequestTile: (key) => canShowRequestTile(modules, key),
+      canShowDocumentTile: (key) => canShowDocumentTile(modules, key),
     }),
     [modules, raw, loading, error, refetch]
   );

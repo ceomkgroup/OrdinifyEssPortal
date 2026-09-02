@@ -10,6 +10,7 @@ import {
   CalendarClock,
   Palmtree,
   Inbox,
+  FileStack,
   Receipt,
   Users,
   CalendarDays,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 import { OrdinifyLogo } from "@/components/ui/OrdinifyLogo";
 import { useModules } from "@/components/modules/ModulesProvider";
+import { DOCUMENT_TYPES } from "@/lib/document-types";
 import { REQUEST_TYPES } from "@/lib/request-types";
 
 const NAV = [
@@ -34,6 +36,12 @@ const NAV = [
     icon: Inbox,
     childrenKey: "requests",
   },
+  {
+    href: "/documents",
+    label: "Documents",
+    icon: FileStack,
+    childrenKey: "documents",
+  },
   { href: "/payslip", label: "Payslip", icon: Receipt },
   { href: "/team", label: "Team", icon: Users },
   { href: "/holidays", label: "Holidays", icon: CalendarDays },
@@ -44,8 +52,14 @@ const NAV = [
 
 export function Sidebar({ open, onClose, collapsed }) {
   const pathname = usePathname();
-  const { canAccessRoute, canShowRequestTile, loading } = useModules();
+  const {
+    canAccessRoute,
+    canShowRequestTile,
+    canShowDocumentTile,
+    loading,
+  } = useModules();
   const [requestsOpen, setRequestsOpen] = useState(false);
+  const [documentsOpen, setDocumentsOpen] = useState(false);
 
   const requestChildren = useMemo(
     () =>
@@ -59,10 +73,21 @@ export function Sidebar({ open, onClose, collapsed }) {
     [canShowRequestTile]
   );
 
+  const documentChildren = useMemo(
+    () =>
+      DOCUMENT_TYPES.filter((item) => canShowDocumentTile(item.key)).map(
+        (item) => ({
+          href: item.href,
+          label: item.title,
+          icon: item.icon,
+        })
+      ),
+    [canShowDocumentTile]
+  );
+
   useEffect(() => {
-    if (pathname?.startsWith("/requests")) {
-      setRequestsOpen(true);
-    }
+    if (pathname?.startsWith("/requests")) setRequestsOpen(true);
+    if (pathname?.startsWith("/documents")) setDocumentsOpen(true);
   }, [pathname]);
 
   const items = NAV.filter((item) => {
@@ -71,6 +96,9 @@ export function Sidebar({ open, onClose, collapsed }) {
     }
     if (item.childrenKey === "requests") {
       return requestChildren.length > 0 || canAccessRoute("/requests");
+    }
+    if (item.childrenKey === "documents") {
+      return documentChildren.length > 0 || canAccessRoute("/documents");
     }
     return canAccessRoute(item.href);
   });
@@ -153,6 +181,72 @@ export function Sidebar({ open, onClose, collapsed }) {
                         All requests
                       </Link>
                       {requestChildren.map((child) => {
+                        const ChildIcon = child.icon;
+                        const active =
+                          pathname === child.href ||
+                          pathname?.startsWith(`${child.href}/`);
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={onClose}
+                            tabIndex={collapsed ? -1 : undefined}
+                            className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                              active
+                                ? "bg-[var(--lavender-soft)] text-[var(--violet)]"
+                                : "text-[var(--muted)] hover:bg-[var(--muted-bg)] hover:text-[var(--text)]"
+                            }`}
+                          >
+                            <ChildIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                            <span className="truncate">{child.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (childrenKey === "documents") {
+              const sectionActive = pathname?.startsWith("/documents");
+              return (
+                <div key={href} className="space-y-0.5">
+                  <button
+                    type="button"
+                    tabIndex={collapsed ? -1 : undefined}
+                    onClick={() => setDocumentsOpen((v) => !v)}
+                    className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13.5px] font-medium leading-none transition-colors duration-200 ${
+                      sectionActive
+                        ? "bg-[var(--lavender-soft)] text-[var(--violet)]"
+                        : "text-[var(--muted)] hover:bg-[var(--muted-bg)] hover:text-[var(--text)]"
+                    }`}
+                  >
+                    {sectionActive ? (
+                      <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r bg-[var(--violet)]" />
+                    ) : null}
+                    <Icon
+                      className="h-[18px] w-[18px] shrink-0"
+                      strokeWidth={1.75}
+                    />
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 shrink-0 opacity-70 transition-transform ${
+                        documentsOpen ? "rotate-180" : ""
+                      }`}
+                      strokeWidth={2}
+                    />
+                  </button>
+
+                  <div
+                    className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
+                      documentsOpen
+                        ? "max-h-[240px] opacity-100"
+                        : "max-h-0 opacity-0"
+                    }`}
+                  >
+                    <div className="ml-4 space-y-0.5 border-l border-[var(--border)] pl-2.5">
+                      {documentChildren.map((child) => {
                         const ChildIcon = child.icon;
                         const active =
                           pathname === child.href ||
