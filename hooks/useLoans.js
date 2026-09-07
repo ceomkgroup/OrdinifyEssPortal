@@ -7,6 +7,12 @@ import {
   listLoansRequests,
 } from "@/api/loans";
 import { getApiErrorMessage } from "@/lib/api-error";
+import {
+  emptyRequestStats,
+  statsFromListResponse,
+} from "@/lib/request-stats";
+
+const EMPTY_STATS = emptyRequestStats();
 
 export function useLoansList({
   status = "all",
@@ -21,6 +27,7 @@ export function useLoansList({
     limit: 10,
     totalPages: 1,
   });
+  const [stats, setStats] = useState(EMPTY_STATS);
   const [loading, setLoading] = useState(Boolean(enabled));
   const [error, setError] = useState(null);
   const [reloadTick, setReloadTick] = useState(0);
@@ -31,6 +38,7 @@ export function useLoansList({
       setRows([]);
       setError(null);
       setMeta({ total: 0, page: 1, limit: 10, totalPages: 1 });
+      setStats(EMPTY_STATS);
       return undefined;
     }
 
@@ -41,8 +49,11 @@ export function useLoansList({
       try {
         const res = await listLoansRequests({ status, page, limit });
         if (!alive) return;
-        setRows(res.rows);
-        setMeta(res.meta || { total: 0, page, limit, totalPages: 1 });
+        const list = res.rows || [];
+        const nextMeta = res.meta || { total: 0, page, limit, totalPages: 1 };
+        setRows(list);
+        setMeta(nextMeta);
+        setStats((prev) => statsFromListResponse(prev, list, nextMeta, status));
       } catch (err) {
         if (!alive) return;
         setError(getApiErrorMessage(err, "Failed to load requests"));
@@ -58,70 +69,7 @@ export function useLoansList({
 
   const refetch = useCallback(() => setReloadTick((n) => n + 1), []);
 
-  return { rows, meta, loading, error, refetch };
-}
-
-export function useLoansStats({ enabled = true } = {}) {
-  const [stats, setStats] = useState({
-    total: 0,
-    pending: 0,
-    approved: 0,
-    cancelled: 0,
-  });
-  const [loading, setLoading] = useState(Boolean(enabled));
-  const [reloadTick, setReloadTick] = useState(0);
-
-  useEffect(() => {
-    if (!enabled) {
-      setLoading(false);
-      return undefined;
-    }
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await listLoansRequests({
-          status: "all",
-          page: 1,
-          limit: 100,
-        });
-        if (!alive) return;
-        const next = {
-          total: Number(res.meta?.total) || (res.rows || []).length,
-          pending: 0,
-          approved: 0,
-          cancelled: 0,
-        };
-        for (const row of res.rows || []) {
-          const s = String(row.status || "").toLowerCase();
-          if (s === "rejected" || s === "cancelled" || s === "canceled") {
-            next.cancelled += 1;
-          } else if (s in next) {
-            next[s] += 1;
-          }
-        }
-        setStats(next);
-      } catch {
-        if (alive) {
-          setStats({
-            total: 0,
-            pending: 0,
-            approved: 0,
-            cancelled: 0,
-          });
-        }
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [enabled, reloadTick]);
-
-  const refetch = useCallback(() => setReloadTick((n) => n + 1), []);
-
-  return { stats, loading, refetch };
+  return { rows, meta, stats, loading, error, refetch };
 }
 
 export async function submitLoan(payload) {

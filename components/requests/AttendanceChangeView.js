@@ -31,7 +31,6 @@ import {
   submitAttendanceChange,
   useAttendanceChangeDetail,
   useAttendanceChangeList,
-  useAttendanceChangeStats,
 } from "@/hooks/useAttendanceChange";
 import {
   countActiveDateFilters,
@@ -440,12 +439,11 @@ export function AttendanceChangeView({
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
 
-  const { rows, meta, loading, error, refetch } = useAttendanceChangeList({
+  const { rows, meta, stats, loading, error, refetch } = useAttendanceChangeList({
     status,
     page,
     limit,
   });
-  const { stats, refetch: refetchStats } = useAttendanceChangeStats();
 
   const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
 
@@ -479,10 +477,13 @@ export function AttendanceChangeView({
 
   function refreshAll() {
     refetch();
-    refetchStats();
   }
 
+  const shouldLoadHistory = showForm || Boolean(prefillLogId);
+
   useEffect(() => {
+    if (!shouldLoadHistory) return undefined;
+
     let alive = true;
     (async () => {
       setHistoryLoading(true);
@@ -518,7 +519,7 @@ export function AttendanceChangeView({
     return () => {
       alive = false;
     };
-  }, [prefillLogId]);
+  }, [shouldLoadHistory, prefillLogId]);
 
   const total = Number(meta?.total) || 0;
   const currentPage = Number(meta?.page) || page;

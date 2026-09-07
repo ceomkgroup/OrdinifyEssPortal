@@ -487,7 +487,7 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
         </>
       }
     >
-      <CollapsibleSection title="Summary" defaultCollapsed className="shrink-0">
+      <CollapsibleSection title="Summary" className="shrink-0">
         <div className="grid grid-cols-3 gap-2.5">
           <SoftStat label="Total" value={stats.total} />
           <SoftStat label="Verified" value={stats.verified} color="#22c55e" />

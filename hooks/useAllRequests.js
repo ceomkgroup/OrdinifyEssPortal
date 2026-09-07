@@ -10,6 +10,7 @@ import { listShiftChangeRequests } from "@/api/shift-change";
 import { listWfhRequests } from "@/api/wfh";
 import { listLoansRequests } from "@/api/loans";
 import { listAdvancesRequests } from "@/api/advances";
+import { listExpenseClaims } from "@/api/expense-claims";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { formatDate } from "@/lib/format";
 import { getRequestTypeByKey } from "@/lib/request-types";
@@ -270,10 +271,34 @@ function mapAdvanceRow(row) {
   };
 }
 
+function mapExpenseClaimRow(row) {
+  const type = getRequestTypeByKey("expenseClaims");
+  return {
+    id: `expenseClaims:${row.expenseClaimId || row.id}`,
+    requestId: row.expenseClaimId || row.id,
+    typeKey: "expenseClaims",
+    typeLabel: type?.title || "Expense Claims",
+    href: type?.href || "/requests/expense-claims",
+    summary: row.reason
+      ? String(row.reason).slice(0, 72)
+      : row.claimNumber
+        ? `Claim ${row.claimNumber}`
+        : row.totalAmount != null
+          ? `Expense · ${row.totalAmount}`
+          : "Expense claim",
+    period: formatDate(row.submittedAt || row.createdAt) || "—",
+    status: row.statusLabel || row.status || "—",
+    statusBucket: statusBucket(row.status),
+    createdAt: row.submittedAt || row.createdAt || null,
+    reason: row.reason || "",
+  };
+}
+
 /**
  * Aggregates live request types into one list for the All Requests hub.
+ * Pass `typeFilter` to fetch only that source (avoids fan-out when filtering).
  */
-export function useAllRequests() {
+export function useAllRequests({ typeFilter = "all" } = {}) {
   const { canShowRequestTile, loading: modulesLoading } = useModules();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -292,14 +317,20 @@ export function useAllRequests() {
     if (canShowRequestTile("onDuty")) list.push("onDuty");
     if (canShowRequestTile("loans")) list.push("loans");
     if (canShowRequestTile("advances")) list.push("advances");
+    if (canShowRequestTile("expenseClaims")) list.push("expenseClaims");
     return list;
   }, [canShowRequestTile]);
+
+  const activeSources = useMemo(() => {
+    if (!typeFilter || typeFilter === "all") return sources;
+    return sources.filter((key) => key === typeFilter);
+  }, [sources, typeFilter]);
 
   const refetch = useCallback(() => {
     setReloadTick((n) => n + 1);
   }, []);
 
-  const sourcesKey = sources.join(",");
+  const sourcesKey = activeSources.join(",");
 
   useEffect(() => {
     if (modulesLoading) return undefined;
@@ -401,6 +432,15 @@ export function useAllRequests() {
               page: 1,
               limit: FETCH_LIMIT,
             }).then((res) => (res.rows || []).map(mapAdvanceRow))
+          );
+        }
+        if (sourceList.includes("expenseClaims")) {
+          tasks.push(
+            listExpenseClaims({
+              status: "all",
+              page: 1,
+              limit: FETCH_LIMIT,
+            }).then((res) => (res.rows || []).map(mapExpenseClaimRow))
           );
         }
 

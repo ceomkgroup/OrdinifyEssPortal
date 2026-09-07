@@ -28,7 +28,6 @@ import {
   submitShiftChange,
   useAvailableShifts,
   useShiftChangeList,
-  useShiftChangeStats,
 } from "@/hooks/useShiftChange";
 import { useMyShift } from "@/hooks/useMyShift";
 import {
@@ -218,12 +217,11 @@ export function ShiftChangeView({
   const [flash, setFlash] = useState("");
   const [flashTone, setFlashTone] = useState("success");
 
-  const { rows, meta, loading, error, refetch } = useShiftChangeList({
+  const { rows, meta, stats, loading, error, refetch } = useShiftChangeList({
     status,
     page,
     limit,
   });
-  const { stats, refetch: refetchStats } = useShiftChangeStats();
   const { shift: currentShift, loading: currentLoading } = useMyShift();
   const { shifts: catalogShifts, loading: shiftsLoading } = useAvailableShifts({
     enabled: showForm,
@@ -363,7 +361,6 @@ export function ShiftChangeView({
 
   function refreshAll() {
     refetch();
-    refetchStats();
   }
 
   async function handleSubmit(event) {

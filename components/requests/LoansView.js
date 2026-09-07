@@ -28,7 +28,6 @@ import {
   cancelLoan,
   submitLoan,
   useLoansList,
-  useLoansStats,
 } from "@/hooks/useLoans";
 import {
   countActiveDateFilters,
@@ -390,13 +389,10 @@ export function LoansView({
   const [flash, setFlash] = useState("");
   const [flashTone, setFlashTone] = useState("success");
 
-  const { rows, meta, loading, error, refetch } = useLoansList({
+  const { rows, meta, stats, loading, error, refetch } = useLoansList({
     status,
     page,
     limit,
-    enabled: moduleEnabled && !modulesLoading,
-  });
-  const { stats, refetch: refetchStats } = useLoansStats({
     enabled: moduleEnabled && !modulesLoading,
   });
 
@@ -546,7 +542,6 @@ export function LoansView({
 
   function refreshAll() {
     refetch();
-    refetchStats();
   }
 
   async function handleSubmit(event) {

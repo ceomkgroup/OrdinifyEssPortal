@@ -28,7 +28,6 @@ import {
   cancelCompOff,
   submitCompOff,
   useCompOffList,
-  useCompOffStats,
 } from "@/hooks/useCompOff";
 import {
   countActiveDateFilters,
@@ -329,12 +328,11 @@ export function CompOffView({
   const [flash, setFlash] = useState("");
   const [flashTone, setFlashTone] = useState("success");
 
-  const { rows, meta, loading, error, refetch } = useCompOffList({
+  const { rows, meta, stats, loading, error, refetch } = useCompOffList({
     status,
     page,
     limit,
   });
-  const { stats, refetch: refetchStats } = useCompOffStats();
 
   const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
 
@@ -476,7 +474,6 @@ export function CompOffView({
 
   function refreshAll() {
     refetch();
-    refetchStats();
   }
 
   async function handleSubmit(event) {

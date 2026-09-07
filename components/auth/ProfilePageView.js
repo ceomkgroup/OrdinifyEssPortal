@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Briefcase,
   Building2,
@@ -12,7 +13,6 @@ import {
   Landmark,
   Mail,
   MapPin,
-  ShieldCheck,
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
@@ -24,12 +24,6 @@ import { PageLoader } from "@/components/ui/Spinner";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePortalProfile } from "@/hooks/usePortalProfile";
 import { formatDate, formatTime, getDisplayName } from "@/lib/format";
-
-const TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "edit", label: "Edit Profile" },
-  { id: "security", label: "Security" },
-];
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 const MARITAL = [
@@ -196,9 +190,9 @@ function SectionTitle({ icon: Icon, title, hint }) {
   );
 }
 
-export function ProfilePageView() {
-  const { changePassword, employee: authEmployee, mergeLocalEmployee } =
-    useAuth();
+export function ProfilePageView({ mode = "overview" }) {
+  const router = useRouter();
+  const { employee: authEmployee, mergeLocalEmployee } = useAuth();
   const {
     profile,
     loading,
@@ -209,19 +203,14 @@ export function ProfilePageView() {
   } = usePortalProfile();
   const fileRef = useRef(null);
 
-  const [tab, setTab] = useState("overview");
   const [form, setForm] = useState(emptyForm);
   const [formKey, setFormKey] = useState("");
   const [saving, setSaving] = useState(false);
-  const [pwdSaving, setPwdSaving] = useState(false);
   const [photoSaving, setPhotoSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [pwd, setPwd] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
+
+  const isEdit = mode === "edit";
 
   const profileKey = profile
     ? `${profile.employeeId}|${profile.updatedAt}|${profile.photoUrl}|${profile.phoneNumber}`
@@ -320,35 +309,11 @@ export function ProfilePageView() {
       setProfile(next);
       syncAuthCache(next);
       setMessage("Profile updated successfully.");
-      setTab("overview");
+      router.push("/profile");
     } catch (err) {
       setError(err.message || "Failed to update profile");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function onChangePassword(e) {
-    e.preventDefault();
-    setPwdSaving(true);
-    setError("");
-    setMessage("");
-    if (pwd.newPassword !== pwd.confirmPassword) {
-      setError("New passwords do not match.");
-      setPwdSaving(false);
-      return;
-    }
-    try {
-      await changePassword({
-        currentPassword: pwd.currentPassword,
-        newPassword: pwd.newPassword,
-      });
-      setMessage("Password changed successfully.");
-      setPwd({ currentPassword: "", newPassword: "", confirmPassword: "" });
-    } catch (err) {
-      setError(err.message || "Failed to change password");
-    } finally {
-      setPwdSaving(false);
     }
   }
 
@@ -399,24 +364,15 @@ export function ProfilePageView() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-[family-name:var(--font-heading)] text-2xl font-semibold text-[var(--text)] md:text-[28px]">
-            My Profile
-          </h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Detailed employee profile from portal API.
-          </p>
-        </div>
-        {tab === "overview" ? (
-          <Button
-            type="button"
-            className="h-10 rounded-xl"
-            onClick={() => setTab("edit")}
-          >
-            Edit Profile
-          </Button>
-        ) : null}
+      <div>
+        <h1 className="font-[family-name:var(--font-heading)] text-2xl font-semibold text-[var(--text)] md:text-[28px]">
+          {isEdit ? "Edit Profile" : "My Profile"}
+        </h1>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          {isEdit
+            ? "Update the details allowed by your company portal."
+            : "Detailed employee profile from portal API."}
+        </p>
       </div>
       {error ? (
         <FlashBanner
@@ -441,7 +397,8 @@ export function ProfilePageView() {
         />
       ) : null}
 
-      {/* Hero */}
+      {/* Hero — overview only */}
+      {!isEdit ? (
       <Card bodyClassName="space-y-5">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           <div className="relative w-fit shrink-0">
@@ -540,33 +497,9 @@ export function ProfilePageView() {
           ))}
         </div>
       </Card>
+      ) : null}
 
-      {/* Tabs */}
-      <div className="grid grid-cols-1 gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--card-shadow)] sm:grid-cols-3">
-        {TABS.map((item) => {
-          const active = tab === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                setMessage("");
-                setError("");
-                setTab(item.id);
-              }}
-              className={`rounded-lg px-3 py-2.5 text-[13px] font-semibold transition ${
-                active
-                  ? "bg-[var(--violet)] text-white"
-                  : "text-[var(--muted)] hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-              }`}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {tab === "overview" ? (
+      {!isEdit ? (
         <div className="grid gap-5 xl:grid-cols-2">
           <Card>
             <SectionTitle
@@ -659,7 +592,7 @@ export function ProfilePageView() {
         </div>
       ) : null}
 
-      {tab === "edit" ? (
+      {isEdit ? (
         <form onSubmit={onSaveProfile} className="grid gap-5">
           <Card>
             <SectionTitle
@@ -817,51 +750,15 @@ export function ProfilePageView() {
               className="h-11 rounded-xl"
               onClick={() => {
                 setForm(toForm(profile));
-                setTab("overview");
                 setError("");
                 setMessage("");
+                router.push("/profile");
               }}
             >
               Cancel
             </Button>
           </div>
         </form>
-      ) : null}
-
-      {tab === "security" ? (
-        <Card className="max-w-xl">
-          <SectionTitle
-            icon={ShieldCheck}
-            title="Change password"
-            hint="Uses auth change-password API"
-          />
-          <form onSubmit={onChangePassword} className="grid max-w-md gap-3">
-            <Field
-              label="Current Password"
-              type="password"
-              value={pwd.currentPassword}
-              onChange={(v) => setPwd((p) => ({ ...p, currentPassword: v }))}
-              required
-            />
-            <Field
-              label="New Password"
-              type="password"
-              value={pwd.newPassword}
-              onChange={(v) => setPwd((p) => ({ ...p, newPassword: v }))}
-              required
-            />
-            <Field
-              label="Confirm New Password"
-              type="password"
-              value={pwd.confirmPassword}
-              onChange={(v) => setPwd((p) => ({ ...p, confirmPassword: v }))}
-              required
-            />
-            <Button type="submit" className="mt-1 h-11 rounded-xl" disabled={pwdSaving}>
-              {pwdSaving ? "Updating..." : "Update Password"}
-            </Button>
-          </form>
-        </Card>
       ) : null}
     </div>
   );

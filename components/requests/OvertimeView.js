@@ -31,7 +31,6 @@ import {
   cancelOvertime,
   submitOvertime,
   useOvertimeList,
-  useOvertimeStats,
 } from "@/hooks/useOvertime";
 import {
   countActiveDateFilters,
@@ -555,12 +554,11 @@ export function OvertimeView({
   const [flash, setFlash] = useState("");
   const [flashTone, setFlashTone] = useState("success");
 
-  const { rows, meta, loading, error, refetch } = useOvertimeList({
+  const { rows, meta, stats, loading, error, refetch } = useOvertimeList({
     status,
     page,
     limit,
   });
-  const { stats, refetch: refetchStats } = useOvertimeStats();
 
   const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
 
@@ -596,6 +594,8 @@ export function OvertimeView({
   }, [rows, listQuery, dateFrom, dateTo]);
 
   useEffect(() => {
+    if (!showForm) return undefined;
+
     let alive = true;
     (async () => {
       setHistoryLoading(true);
@@ -623,7 +623,7 @@ export function OvertimeView({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [showForm]);
 
   const selectedLog = useMemo(
     () => historyOptions.find((row) => row.logId === form.logId) || null,
@@ -747,7 +747,6 @@ export function OvertimeView({
 
   function refreshAll() {
     refetch();
-    refetchStats();
   }
 
   function onPickAttendanceDay(dateKey, log) {

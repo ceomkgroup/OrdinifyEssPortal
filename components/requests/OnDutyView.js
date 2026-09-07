@@ -29,7 +29,6 @@ import {
   cancelOnDuty,
   submitOnDuty,
   useOnDutyList,
-  useOnDutyStats,
 } from "@/hooks/useOnDuty";
 import {
   countActiveDateFilters,
@@ -347,12 +346,11 @@ export function OnDutyView({ timeFormat = "12h", dateFormat = "DD/MM/YYYY" }) {
   const [flash, setFlash] = useState("");
   const [flashTone, setFlashTone] = useState("success");
 
-  const { rows, meta, loading, error, refetch } = useOnDutyList({
+  const { rows, meta, stats, loading, error, refetch } = useOnDutyList({
     status,
     page,
     limit,
   });
-  const { stats, refetch: refetchStats } = useOnDutyStats();
 
   const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
 
@@ -487,7 +485,6 @@ export function OnDutyView({ timeFormat = "12h", dateFormat = "DD/MM/YYYY" }) {
 
   function refreshAll() {
     refetch();
-    refetchStats();
   }
 
   async function handleSubmit(event) {

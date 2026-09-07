@@ -179,20 +179,20 @@ export function PunchWidget({
   // Infer punch state from times when API omits boolean flags.
   const punchedOut = Boolean(
     todayAttendance?.isCheckedOut === true ||
-      (punchInAt && punchOutAt) ||
-      (timer?.punchInAt && timer?.punchOutAt && !todayAttendance)
+    (punchInAt && punchOutAt) ||
+    (timer?.punchInAt && timer?.punchOutAt && !todayAttendance)
   );
   const punchedIn = Boolean(
     !punchedOut &&
-      (todayAttendance?.isCheckedIn === true ||
-        Boolean(punchInAt) ||
-        (Boolean(timer?.punchInAt) && !todayAttendance))
+    (todayAttendance?.isCheckedIn === true ||
+      Boolean(punchInAt) ||
+      (Boolean(timer?.punchInAt) && !todayAttendance))
   );
   const isOnBreak = Boolean(
     breakEnabled &&
-      punchedIn &&
-      (todayAttendance?.isOnBreak === true ||
-        todayAttendance?.onBreak === true)
+    punchedIn &&
+    (todayAttendance?.isOnBreak === true ||
+      todayAttendance?.onBreak === true)
   );
   const canWebPunch = canWebPunchPermission(punchPermissions, employee);
   const geofenceActive = Boolean(geofence?.geofence);
@@ -252,8 +252,8 @@ export function PunchWidget({
       breakPolicy?.breakMinutesUsed != null
         ? Number(breakPolicy.breakMinutesUsed)
         : breakLogs
-            .filter((row) => row.end)
-            .reduce((sum, row) => sum + (Number(row.minutes) || 0), 0);
+          .filter((row) => row.end)
+          .reduce((sum, row) => sum + (Number(row.minutes) || 0), 0);
 
     if (isOnBreak) {
       const breakStart = toDate(activeBreakStart);
@@ -476,8 +476,8 @@ export function PunchWidget({
             Today&apos;s Attendance
           </span>
           {todayAttendance?.attTypeName ||
-          todayAttendance?.attTypeCode ||
-          todayAttendance?.status ? (
+            todayAttendance?.attTypeCode ||
+            todayAttendance?.status ? (
             <AttendanceTypeBadge
               row={todayAttendance}
               types={attendanceTypes}
@@ -519,16 +519,14 @@ export function PunchWidget({
       ) : null}
 
       <div
-        className={`grid gap-4 ${
-          breakEnabled ? "xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" : ""
-        }`}
+        className={`grid gap-4 ${breakEnabled ? "xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" : ""
+          }`}
       >
         {/* Left: time + progress + punch */}
         <div className="min-w-0 space-y-4">
           <div
-            className={`grid grid-cols-1 gap-2.5 ${
-              breakEnabled ? "sm:grid-cols-3" : "sm:grid-cols-2"
-            }`}
+            className={`grid grid-cols-1 gap-2.5 ${breakEnabled ? "sm:grid-cols-3" : "sm:grid-cols-2"
+              }`}
           >
             <div className="rounded-xl bg-[var(--panel-soft)] px-3.5 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
@@ -571,11 +569,10 @@ export function PunchWidget({
             <div className="relative h-[30px] overflow-hidden rounded-full bg-[var(--progress-track)] p-[3px] shadow-[inset_0_2px_4px_rgba(75,29,148,0.08)] ring-1 ring-[var(--border)]">
               <div className="relative h-full w-full overflow-hidden rounded-full bg-[var(--progress-track-inner)]">
                 <div
-                  className={`progress-fill relative h-full rounded-full ${
-                    progressReady
-                      ? "transition-[width] duration-700 ease-linear"
-                      : ""
-                  } ${isOnBreak ? "opacity-70" : ""}`}
+                  className={`progress-fill relative h-full rounded-full ${progressReady
+                    ? "transition-[width] duration-700 ease-linear"
+                    : ""
+                    } ${isOnBreak ? "opacity-70" : ""}`}
                   style={{ width: `${progress.percent}%` }}
                 >
                   <span className="progress-stripes absolute inset-0 rounded-full opacity-40" />
@@ -731,7 +728,7 @@ export function PunchWidget({
                   >
                     {punching && punchAction === "break-out"
                       ? "Starting..."
-                      : "Break Out"}
+                      : "Break In"}
                   </Button>
                   <Button
                     type="button"
@@ -741,7 +738,7 @@ export function PunchWidget({
                   >
                     {punching && punchAction === "break-in"
                       ? "Ending..."
-                      : "Break In"}
+                      : "Break Out"}
                   </Button>
                 </div>
               ) : null}
@@ -790,7 +787,7 @@ export function PunchWidget({
                               (now.getTime() -
                                 (toDate(activeBreakStart)?.getTime() ||
                                   now.getTime())) /
-                                60000
+                              60000
                             )
                           )}
                         </span>

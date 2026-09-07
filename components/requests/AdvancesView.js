@@ -28,7 +28,6 @@ import {
   cancelAdvance,
   submitAdvance,
   useAdvancesList,
-  useAdvancesStats,
 } from "@/hooks/useAdvances";
 import {
   countActiveDateFilters,
@@ -404,13 +403,10 @@ export function AdvancesView({
   const [flash, setFlash] = useState("");
   const [flashTone, setFlashTone] = useState("success");
 
-  const { rows, meta, loading, error, refetch } = useAdvancesList({
+  const { rows, meta, stats, loading, error, refetch } = useAdvancesList({
     status,
     page,
     limit,
-    enabled: moduleEnabled && !modulesLoading,
-  });
-  const { stats, refetch: refetchStats } = useAdvancesStats({
     enabled: moduleEnabled && !modulesLoading,
   });
 
@@ -549,7 +545,6 @@ export function AdvancesView({
 
   function refreshAll() {
     refetch();
-    refetchStats();
   }
 
   async function handleSubmit(event) {

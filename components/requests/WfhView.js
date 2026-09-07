@@ -28,7 +28,6 @@ import {
   cancelWfh,
   submitWfh,
   useWfhList,
-  useWfhStats,
 } from "@/hooks/useWfh";
 import {
   countActiveDateFilters,
@@ -345,12 +344,11 @@ export function WfhView({ timeFormat = "12h", dateFormat = "DD/MM/YYYY" }) {
   const [flash, setFlash] = useState("");
   const [flashTone, setFlashTone] = useState("success");
 
-  const { rows, meta, loading, error, refetch } = useWfhList({
+  const { rows, meta, stats, loading, error, refetch } = useWfhList({
     status,
     page,
     limit,
   });
-  const { stats, refetch: refetchStats } = useWfhStats();
 
   const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
 
@@ -473,7 +471,6 @@ export function WfhView({ timeFormat = "12h", dateFormat = "DD/MM/YYYY" }) {
 
   function refreshAll() {
     refetch();
-    refetchStats();
   }
 
   async function handleSubmit(event) {

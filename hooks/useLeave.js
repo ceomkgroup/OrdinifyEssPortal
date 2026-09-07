@@ -110,8 +110,17 @@ export function useLeavePage() {
     };
   }, [status, page, limit, reloadTick]);
 
-  // Always probe encashment API — company flag names vary; API is source of truth.
+  // Encashment list — only when company flag allows (skip extra API on leave page).
   useEffect(() => {
+    if (!flagEncashment) {
+      setEncashLoading(false);
+      setEncashDisabled(true);
+      setEncashProbed(true);
+      setEncashRows([]);
+      setEncashMessage("");
+      return undefined;
+    }
+
     let alive = true;
 
     queueMicrotask(() => {
@@ -154,7 +163,7 @@ export function useLeavePage() {
     return () => {
       alive = false;
     };
-  }, [encashStatus, encashPage, encashLimit, reloadTick]);
+  }, [flagEncashment, encashStatus, encashPage, encashLimit, reloadTick]);
 
   // Show encashment when modules flag is on, OR API confirms it is enabled.
   const encashmentEnabled =

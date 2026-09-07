@@ -6,8 +6,6 @@ import {
   ArrowUpRight,
   CheckCircle2,
   ChevronDown,
-  Construction,
-  Hourglass,
   Inbox,
   Layers,
   Plus,
@@ -98,7 +96,6 @@ function NewRequestMenu({ tiles }) {
 
 export function RequestsHubView() {
   const { canShowRequestTile, loading: modulesLoading } = useModules();
-  const { rows, loading, error, refetch, sources } = useAllRequests();
 
   const {
     status: statusFilter,
@@ -122,6 +119,10 @@ export function RequestsHubView() {
     draftTypeFilter,
     setDraftTypeFilter,
   } = useRequestListQuery({ withType: true });
+
+  const { rows, loading, error, refetch, sources } = useAllRequests({
+    typeFilter,
+  });
 
   const statusTabs = REQUEST_STATUS_OPTIONS.map((item) => ({
     value: item.value,
@@ -328,51 +329,58 @@ export function RequestsHubView() {
         </div>
       </CollapsibleSection>
 
-      {/* Apply by type — type-specific pages */}
+      {/* Apply by type — compact chips, no scroll */}
       <section>
-        <div className="mb-3">
-          <h2 className="heading-section">
-            Apply by type
-          </h2>
-          <p className="heading-sub">
-            Forms, balances, and rules live on each module page
-          </p>
+        <div className="mb-2.5 flex flex-wrap items-end justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="heading-section">Apply by type</h2>
+            <p className="heading-sub mt-0.5">
+              Pick a module to apply or manage requests
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex flex-wrap gap-2">
           {visibleTiles.map((tile) => {
             const Icon = tile.icon || Inbox;
             const pending = Number(pendingCounts[tile.key]) || 0;
+            const label = tile.title.replace(/ Request$/i, "");
+            const hasPending = tile.live && pending > 0;
             return (
               <Link
                 key={tile.key}
                 href={tile.href}
-                className="group flex min-w-[148px] shrink-0 items-center gap-2.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 shadow-[var(--card-shadow)] transition hover:border-[var(--violet)]/40 hover:bg-[var(--lavender-soft)]/40"
+                title={
+                  !tile.live
+                    ? `${label} — coming soon`
+                    : hasPending
+                      ? `${label} — ${pending} pending`
+                      : label
+                }
+                className={`group inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-2 text-[12.5px] font-semibold transition ${
+                  hasPending
+                    ? "border-[var(--warning)]/25 bg-[var(--warning-soft)] text-[var(--text)] hover:border-[var(--warning)]/40"
+                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:border-[var(--violet)]/35 hover:bg-[var(--lavender-soft)]"
+                }`}
               >
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--lavender-soft)] text-[var(--violet)]">
-                  <Icon className="h-4 w-4" />
+                <span
+                  className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                    hasPending
+                      ? "bg-[var(--surface)] text-[var(--warning)]"
+                      : "bg-[var(--lavender-soft)] text-[var(--violet)]"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-semibold text-[var(--text)]">
-                    {tile.title.replace(" Request", "")}
-                  </p>
-                  <p className="text-[10px] text-[var(--muted)]">
-                    {tile.live ? (
-                      pending > 0 ? (
-                        <span className="text-[var(--warning)]">
-                          {pending} pending
-                        </span>
-                      ) : (
-                        "Open"
-                      )
-                    ) : (
-                      <span className="inline-flex items-center gap-0.5 text-[var(--warning)]">
-                        <Construction className="h-2.5 w-2.5" />
-                        Soon
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[var(--muted)] group-hover:text-[var(--violet)]" />
+                <span className="truncate">{label}</span>
+                {hasPending ? (
+                  <span className="inline-flex min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-[var(--surface)] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[var(--warning)] ring-1 ring-[var(--warning)]/20">
+                    {pending}
+                  </span>
+                ) : !tile.live ? (
+                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    Soon
+                  </span>
+                ) : null}
               </Link>
             );
           })}
