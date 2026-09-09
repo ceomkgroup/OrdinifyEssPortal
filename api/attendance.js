@@ -138,7 +138,7 @@ export async function getAttendanceGeofenceInfo() {
 
 /**
  * POST check-in.
- * Body: punchSource, latitude?, longitude?, accuracy?, isMockProvider?, verificationToken?
+ * Body: punchSource, deviceName, latitude?, longitude?, accuracy?, isMockProvider?, verificationToken?
  */
 export async function checkInAttendance(payload) {
   try {
@@ -155,7 +155,7 @@ export async function checkInAttendance(payload) {
 /**
  * PATCH check-out for today's log.
  * Path: /attendance/{logId}/check-out
- * Body: latitude?, longitude? (GPS only when geofence is active)
+ * Body: punchSource, deviceName, latitude?, longitude?, accuracy?, isMockProvider?
  */
 export async function checkOutAttendance(logId, payload = {}) {
   const id = resolveAttendanceLogId(logId);

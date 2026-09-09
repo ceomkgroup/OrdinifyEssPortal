@@ -71,16 +71,42 @@ export function normalizeAttendancePolicy(raw = {}) {
   };
 }
 
+let policyCache = null;
+let policyCacheAt = 0;
+let policyPromise = null;
+const POLICY_TTL_MS = 5 * 60 * 1000;
+
 /**
  * Fully resolved attendance policy (company + dept + shift + employee).
  * GET /api/employee/portal/attendance-policy
+ * Shared cache + in-flight promise so Strict Mode / multi-mount don't double-hit.
  */
-export async function getAttendancePolicy() {
-  try {
-    const { data } = await api.get("/api/employee/portal/attendance-policy");
-    const body = unwrap(data, "Failed to load attendance policy");
-    return normalizeAttendancePolicy(body.data || {});
-  } catch (err) {
-    throw toApiError(err, "Failed to load attendance policy");
+export async function getAttendancePolicy({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && policyCache && now - policyCacheAt < POLICY_TTL_MS) {
+    return policyCache;
   }
+  if (!force && policyPromise) return policyPromise;
+
+  policyPromise = (async () => {
+    try {
+      const { data } = await api.get("/api/employee/portal/attendance-policy");
+      const body = unwrap(data, "Failed to load attendance policy");
+      policyCache = normalizeAttendancePolicy(body.data || {});
+      policyCacheAt = Date.now();
+      return policyCache;
+    } catch (err) {
+      throw toApiError(err, "Failed to load attendance policy");
+    } finally {
+      policyPromise = null;
+    }
+  })();
+
+  return policyPromise;
+}
+
+export function clearAttendancePolicyApiCache() {
+  policyCache = null;
+  policyCacheAt = 0;
+  policyPromise = null;
 }

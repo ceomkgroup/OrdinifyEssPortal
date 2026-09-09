@@ -19,15 +19,11 @@ import { useDashboard } from "@/hooks/useDashboard";
 import { useAttendanceLive } from "@/hooks/useAttendance";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useModules } from "@/components/modules/ModulesProvider";
-import { useAnnouncementsBadge } from "@/components/announcements/AnnouncementsBadgeContext";
-import { listAnnouncements } from "@/api/announcements";
 import { greetingByHour } from "@/lib/format";
-import { useEffect } from "react";
 
 export function DashboardView() {
   const { logout, employee: authEmployee } = useAuth();
   const { canShowWidget } = useModules();
-  const { syncFromRows } = useAnnouncementsBadge();
   const { data, loading, error, refetch } = useDashboard();
   const {
     today: liveToday,
@@ -43,22 +39,6 @@ export function DashboardView() {
     fetchTodayOnMount: false,
     fetchSummaryOnMount: false,
   });
-
-  // One announcements list for header unread badge (cached for announcements page).
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const res = await listAnnouncements({ page: 1, limit: 50 });
-        if (alive) syncFromRows(res.rows);
-      } catch {
-        // Badge can stay at 0.
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [syncFromRows]);
 
   if (loading && !data) {
     return <PageLoader label="Loading dashboard" hint="Pulling your day overview…" />;

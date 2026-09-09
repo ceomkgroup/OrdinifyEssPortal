@@ -2,10 +2,14 @@
 
 import { useMemo } from "react";
 import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+import "dayjs/locale/en-gb";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+
+dayjs.extend(customParseFormat);
 
 const pickerTheme = createTheme({
   palette: {
@@ -58,6 +62,28 @@ const pickerTheme = createTheme({
   },
 });
 
+/** Company dateFormat → picker display. Default always day/month/year. */
+export function toPickerDateFormat(dateFormat = "DD/MM/YYYY") {
+  const key = String(dateFormat || "DD/MM/YYYY")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  if (key === "MM/DD/YYYY") return "MM/DD/YYYY";
+  if (key === "YYYY-MM-DD" || key === "YYYY/MM/DD") return "YYYY-MM-DD";
+  if (key === "DD-MM-YYYY") return "DD-MM-YYYY";
+  return "DD/MM/YYYY";
+}
+
+function parseApiDate(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  // API / form value is always YYYY-MM-DD
+  const iso = dayjs(raw, "YYYY-MM-DD", true);
+  if (iso.isValid()) return iso;
+  const loose = dayjs(raw);
+  return loose.isValid() ? loose : null;
+}
+
 function DateFieldInner({
   label,
   value,
@@ -65,19 +91,27 @@ function DateFieldInner({
   min,
   max,
   clearable = false,
+  required = false,
+  disabled = false,
+  dateFormat = "DD/MM/YYYY",
   className = "",
 }) {
-  const parsed = useMemo(() => (value ? dayjs(value) : null), [value]);
-  const minDate = useMemo(() => (min ? dayjs(min) : undefined), [min]);
-  const maxDate = useMemo(() => (max ? dayjs(max) : undefined), [max]);
+  const displayFormat = toPickerDateFormat(dateFormat);
+  const parsed = useMemo(() => parseApiDate(value), [value]);
+  const minDate = useMemo(() => (min ? parseApiDate(min) : undefined), [min]);
+  const maxDate = useMemo(() => (max ? parseApiDate(max) : undefined), [max]);
 
   return (
     <div className={className}>
       <DatePicker
         label={label}
-        value={parsed?.isValid() ? parsed : null}
-        minDate={minDate}
-        maxDate={maxDate}
+        format={displayFormat}
+        views={["year", "month", "day"]}
+        openTo="day"
+        value={parsed}
+        minDate={minDate || undefined}
+        maxDate={maxDate || undefined}
+        disabled={disabled}
         onChange={(next) => {
           if (!next || !next.isValid()) {
             onChange?.("");
@@ -89,6 +123,8 @@ function DateFieldInner({
           textField: {
             size: "small",
             fullWidth: true,
+            required,
+            placeholder: displayFormat,
           },
           field: {
             clearable: Boolean(clearable),
@@ -109,7 +145,7 @@ function DateFieldInner({
 function withPickerProviders(children) {
   return (
     <ThemeProvider theme={pickerTheme}>
-      <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="en-gb">
         {children}
       </LocalizationProvider>
     </ThemeProvider>
@@ -117,7 +153,8 @@ function withPickerProviders(children) {
 }
 
 /**
- * MUI DatePicker for filter drawers. Value is YYYY-MM-DD string.
+ * MUI DatePicker. Value is always YYYY-MM-DD for APIs.
+ * Display defaults to DD/MM/YYYY (day / month / year).
  */
 export function MuiDateField(props) {
   return withPickerProviders(<DateFieldInner {...props} />);
@@ -132,6 +169,7 @@ export function MuiDateRangeFields({
   fromLabel = "From",
   toLabel = "To",
   clearable = true,
+  dateFormat = "DD/MM/YYYY",
   className = "",
 }) {
   return withPickerProviders(
@@ -142,6 +180,7 @@ export function MuiDateRangeFields({
         onChange={onFromChange}
         max={to || undefined}
         clearable={clearable}
+        dateFormat={dateFormat}
       />
       <DateFieldInner
         label={toLabel}
@@ -149,6 +188,7 @@ export function MuiDateRangeFields({
         onChange={onToChange}
         min={from || undefined}
         clearable={clearable}
+        dateFormat={dateFormat}
       />
     </div>
   );

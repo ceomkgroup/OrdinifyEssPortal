@@ -5,14 +5,11 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { getPortalProfile } from "@/api/portal";
-import {
-  AnnouncementsBadgeProvider,
-  useAnnouncementsBadge,
-} from "@/components/announcements/AnnouncementsBadgeContext";
+import { AnnouncementsBadgeProvider } from "@/components/announcements/AnnouncementsBadgeContext";
+import { NotificationsBadgeProvider } from "@/components/notifications/NotificationsBadgeContext";
 
 function PortalShellInner({ children, employee, companySettings }) {
   const { employee: authEmployee, mergeLocalEmployee } = useAuth();
-  const { unreadCount } = useAnnouncementsBadge();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const profile = employee || authEmployee;
@@ -64,7 +61,8 @@ function PortalShellInner({ children, employee, companySettings }) {
             employee={profile}
             timezone={companySettings?.timezone}
             sidebarCollapsed={desktopCollapsed}
-            notificationCount={unreadCount}
+            dateFormat={companySettings?.dateFormat || "DD/MM/YYYY"}
+            timeFormat={companySettings?.timeFormat || "12h"}
             onMenuClick={() => {
               if (typeof window !== "undefined" && window.innerWidth >= 1024) {
                 setDesktopCollapsed((value) => !value);
@@ -85,9 +83,11 @@ function PortalShellInner({ children, employee, companySettings }) {
 export function PortalShell({ children, employee, companySettings }) {
   return (
     <AnnouncementsBadgeProvider>
-      <PortalShellInner employee={employee} companySettings={companySettings}>
-        {children}
-      </PortalShellInner>
+      <NotificationsBadgeProvider>
+        <PortalShellInner employee={employee} companySettings={companySettings}>
+          {children}
+        </PortalShellInner>
+      </NotificationsBadgeProvider>
     </AnnouncementsBadgeProvider>
   );
 }

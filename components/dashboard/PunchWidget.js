@@ -19,6 +19,7 @@ import {
   getPunchGeoPosition,
   resolveAttendanceLogId,
 } from "@/api/attendance";
+import { getWebDeviceName } from "@/api/auth";
 import {
   canShowBreakManagement,
   canStartAnotherBreak,
@@ -33,6 +34,12 @@ import { AttendanceTypeBadge } from "@/components/attendance/AttendanceTypeBadge
 import { useAttendancePolicy } from "@/hooks/useAttendancePolicy";
 import { useAttendanceTypes } from "@/hooks/useAttendanceTypes";
 
+function buildBasePunchPayload() {
+  return {
+    punchSource: "web",
+    deviceName: getWebDeviceName(),
+  };
+}
 function parseShiftMinutes(time24) {
   if (!time24) return null;
   const raw = String(time24).trim();
@@ -364,10 +371,7 @@ export function PunchWidget({
     setPunchAction("in");
 
     try {
-      const payload = await attachPunchGps({
-        punchSource: "web",
-      });
-
+      const payload = await attachPunchGps(buildBasePunchPayload());
       const result = await checkInAttendance(payload);
       const late = result?.meta?.lateMinutes;
       setPunchSuccess(
@@ -400,14 +404,8 @@ export function PunchWidget({
         throw err;
       }
 
-      const payload = await attachPunchGps({});
-      const body = {};
-      if (payload.latitude != null && payload.longitude != null) {
-        body.latitude = payload.latitude;
-        body.longitude = payload.longitude;
-      }
-
-      const result = await checkOutAttendance(logId, body);
+      const payload = await attachPunchGps(buildBasePunchPayload());
+      const result = await checkOutAttendance(logId, payload);
       const hours = result?.meta?.workingHours ?? result?.data?.workingHours;
       setPunchSuccess(
         hours != null

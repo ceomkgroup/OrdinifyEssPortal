@@ -1,5 +1,7 @@
 import api from "@/lib/axios";
 import { uploadEmployeePhoto } from "@/api/upload";
+import { clearAttendancePolicyApiCache } from "@/api/attendance-policy";
+import { clearAttendanceTypesCache, clearLeaveTypesCache } from "@/api/dropdowns";
 
 let dashboardPromise = null;
 let dashboardCache = null;
@@ -84,6 +86,9 @@ export function clearModulesCache() {
 export function clearPortalCaches() {
   clearDashboardCache();
   clearModulesCache();
+  clearAttendancePolicyApiCache();
+  clearAttendanceTypesCache();
+  clearLeaveTypesCache();
 }
 
 export async function getPortalProfile() {

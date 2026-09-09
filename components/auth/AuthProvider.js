@@ -19,10 +19,12 @@ import {
   updateAuthProfile,
   uploadProfilePhoto as uploadProfilePhotoApi,
 } from "@/api/auth";
+import { unregisterFcmToken } from "@/api/fcm";
 import {
   clearAuthSession,
   getAccessToken,
   getStoredEmployee,
+  migrateAwayFromLocalStorageAuth,
   pickEmployee,
   setAuthSession,
 } from "@/lib/auth-storage";
@@ -31,17 +33,6 @@ import { FullScreenLoader } from "@/components/ui/Spinner";
 
 const AuthContext = createContext(null);
 const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
-
-function isIncompleteProfile(employee) {
-  if (!employee) return true;
-  return !(
-    employee.departmentName ||
-    employee.designationName ||
-    employee.branchName ||
-    employee.joinDate ||
-    employee.employmentType
-  );
-}
 
 function mergeEmployee(prev, next) {
   if (!next) return prev || null;
@@ -76,9 +67,13 @@ export function AuthProvider({ children }) {
     let alive = true;
 
     (async () => {
+      // Old builds kept JWTs in localStorage — wipe so closed browsers stay locked.
+      migrateAwayFromLocalStorageAuth();
+
       const token = getAccessToken();
       if (!token) {
         if (!alive) return;
+        clearAuthSession();
         setHasToken(false);
         setEmployee(null);
         setBootstrapping(false);
@@ -86,17 +81,9 @@ export function AuthProvider({ children }) {
       }
 
       const cached = getStoredEmployee();
-      if (!alive) return;
+      if (cached && alive) setEmployee(cached);
 
-      setHasToken(true);
-      if (cached && !isIncompleteProfile(cached)) {
-        setEmployee(cached);
-        setBootstrapping(false);
-        return;
-      }
-
-      if (cached) setEmployee(cached);
-
+      // Always validate with backend — never trust a stale browser token alone.
       try {
         const me = await getAuthMe();
         if (!alive) return;
@@ -104,16 +91,13 @@ export function AuthProvider({ children }) {
         const merged = mergeEmployee(cached, profile);
         setEmployee(merged);
         setAuthSession({ employee: merged });
+        setHasToken(true);
       } catch {
         if (!alive) return;
-        if (cached) {
-          // Keep cached profile if /me fails.
-          setEmployee(cached);
-        } else {
-          clearAuthSession();
-          setHasToken(false);
-          setEmployee(null);
-        }
+        clearAuthSession();
+        clearPortalCaches();
+        setHasToken(false);
+        setEmployee(null);
       } finally {
         if (alive) setBootstrapping(false);
       }
@@ -185,6 +169,18 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     setAuthLoading(true);
     try {
+      if (typeof window !== "undefined") {
+        const fcmToken =
+          window.sessionStorage.getItem("employee_fcm_token") || "";
+        if (fcmToken) {
+          try {
+            await unregisterFcmToken(fcmToken);
+          } catch {
+            // continue logout even if FCM unregister fails
+          }
+          window.sessionStorage.removeItem("employee_fcm_token");
+        }
+      }
       await logoutEmployee();
     } finally {
       clearAuthSession();

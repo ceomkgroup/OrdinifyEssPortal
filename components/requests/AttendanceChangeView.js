@@ -19,6 +19,7 @@ import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
+import { MuiDateField } from "@/components/ui/MuiDateField";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
@@ -869,18 +870,15 @@ export function AttendanceChangeView({
             </select>
           </label>
 
-          <label className="block text-[12px] font-medium text-[var(--muted)]">
-            Attendance date
-            <input
-              type="date"
-              required
-              className={fieldClass}
-              value={form.attendanceDate}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, attendanceDate: e.target.value }))
-              }
-            />
-          </label>
+          <MuiDateField
+            label="Attendance date"
+            required
+            dateFormat={dateFormat || "DD/MM/YYYY"}
+            value={form.attendanceDate}
+            onChange={(next) =>
+              setForm((prev) => ({ ...prev, attendanceDate: next }))
+            }
+          />
 
           <div className="flex items-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5 text-[12px] text-[var(--muted)]">
             <Clock3 className="h-4 w-4 shrink-0 text-[var(--violet)]" />

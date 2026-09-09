@@ -16,6 +16,8 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { LogoLoader } from "@/components/ui/Spinner";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useFcm } from "@/components/notifications/FcmProvider";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { getDisplayName } from "@/lib/format";
 
@@ -24,11 +26,14 @@ export function Header({
   timezone,
   onMenuClick,
   sidebarCollapsed = false,
-  notificationCount = 0,
+  dateFormat = "DD/MM/YYYY",
+  timeFormat = "12h",
 }) {
   const { logout, authLoading, employee: authEmployee } = useAuth();
+  const { permission, enabling, enable } = useFcm();
   const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pushMsg, setPushMsg] = useState("");
   const menuRef = useRef(null);
 
   const profile = employee || authEmployee;
@@ -94,19 +99,7 @@ export function Header({
           )}
         </button>
 
-        <Link
-          href="/announcements"
-          className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--lavender-soft)] hover:text-[var(--violet)]"
-          aria-label="Announcements"
-          title="Announcements"
-        >
-          <Bell className="h-4 w-4" strokeWidth={1.8} />
-          {notificationCount > 0 ? (
-            <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-bold text-white">
-              {notificationCount > 99 ? "99+" : notificationCount}
-            </span>
-          ) : null}
-        </Link>
+        <NotificationsBell dateFormat={dateFormat} timeFormat={timeFormat} />
 
         <div className="relative" ref={menuRef}>
           <button
@@ -163,6 +156,33 @@ export function Header({
                 <Settings className="h-4 w-4" />
                 Account Settings
               </Link>
+
+              {permission !== "granted" && permission !== "unsupported" ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={enabling}
+                  onClick={async () => {
+                    setPushMsg("");
+                    try {
+                      await enable();
+                      setPushMsg("Notifications enabled");
+                    } catch (err) {
+                      setPushMsg(err?.message || "Could not enable notifications");
+                    }
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-[var(--text)] hover:bg-[var(--lavender-soft)] hover:text-[var(--violet)]"
+                >
+                  <Bell className="h-4 w-4" />
+                  {enabling ? "Enabling…" : "Enable notifications"}
+                </button>
+              ) : null}
+
+              {pushMsg ? (
+                <p className="border-t border-[var(--border)] px-3 py-2 text-[11px] text-[var(--muted)]">
+                  {pushMsg}
+                </p>
+              ) : null}
 
               <button
                 type="button"
