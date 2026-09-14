@@ -58,7 +58,9 @@ export function WeeklyHoursCard({ weekHours = [] }) {
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ece8f8" />
             <XAxis
               dataKey="axis"
-              tick={{ fill: "#6B7280", fontSize: 11 }}
+              interval="preserveStartEnd"
+              minTickGap={8}
+              tick={{ fill: "#6B7280", fontSize: 10 }}
               axisLine={false}
               tickLine={false}
             />
@@ -66,7 +68,7 @@ export function WeeklyHoursCard({ weekHours = [] }) {
               domain={[0, 10]}
               ticks={[0, 2, 4, 6, 8, 10]}
               width={28}
-              tick={{ fill: "#6B7280", fontSize: 11 }}
+              tick={{ fill: "#6B7280", fontSize: 10 }}
               axisLine={false}
               tickLine={false}
             />

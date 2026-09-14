@@ -5,9 +5,13 @@ import { formatCurrency, formatDate } from "@/lib/format";
 
 function Field({ label, value, valueClass = "text-[var(--text)]" }) {
   return (
-    <div className="min-w-[120px]">
+    <div className="min-w-0 max-w-full sm:max-w-[11rem]">
       <p className="text-[11px] text-[var(--muted)]">{label}</p>
-      <p className={`mt-0.5 text-[13px] font-semibold ${valueClass}`}>{value}</p>
+      <p
+        className={`mt-0.5 break-words text-[13px] font-semibold leading-snug ${valueClass}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -19,13 +23,13 @@ export function LastPayslipBar({ lastPayslip, dateFormat }) {
 
   return (
     <Card className="h-full" bodyClassName="flex items-center">
-      <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="flex w-full min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--success-soft)] text-[var(--success)]">
             <WalletCards className="h-6 w-6" />
           </span>
 
-          <div className="flex flex-wrap gap-x-8 gap-y-3">
+          <div className="flex min-w-0 flex-wrap gap-x-6 gap-y-3 sm:gap-x-8">
             <Field
               label="Net Salary"
               value={formatCurrency(lastPayslip.netSalary, currency)}
@@ -47,7 +51,10 @@ export function LastPayslipBar({ lastPayslip, dateFormat }) {
           </div>
         </div>
 
-        <Button variant="outline" className="h-10 shrink-0 rounded-lg px-4">
+        <Button
+          variant="outline"
+          className="h-10 w-full shrink-0 rounded-lg px-4 sm:w-auto"
+        >
           <Eye className="h-4 w-4" />
           View Payslip
         </Button>

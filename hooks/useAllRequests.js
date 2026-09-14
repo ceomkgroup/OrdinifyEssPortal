@@ -47,7 +47,7 @@ function mapLeaveRow(row) {
     requestId: row.requestId || row.id,
     typeKey: "leave",
     typeLabel: type?.title || "Leave Request",
-    href: type?.href || "/requests/leave",
+    href: type?.href || "/leave/logs",
     summary: days != null ? `${leaveName} · ${days} day(s)` : leaveName,
     period,
     status: row.status || row.statusLabel || "—",
@@ -66,7 +66,7 @@ function mapEncashRow(row) {
     requestId: row.encashmentId || row.requestId || row.id,
     typeKey: "encashment",
     typeLabel: type?.title || "Leave Encashment",
-    href: type?.href || "/requests/encashment",
+    href: type?.href || "/leave/encashment",
     summary:
       days != null
         ? `${leaveName} · ${days} day(s) encash`

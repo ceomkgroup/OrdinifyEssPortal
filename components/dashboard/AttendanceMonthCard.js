@@ -1,7 +1,6 @@
 "use client";
 
 import { Card } from "@/components/ui/Card";
-import { useModules } from "@/components/modules/ModulesProvider";
 import { useAttendanceTypes } from "@/hooks/useAttendanceTypes";
 import { getAttendanceTypeColor } from "@/lib/attendance-history";
 import { formatHoursMinutes, formatMonthYear } from "@/lib/format";
@@ -15,7 +14,7 @@ function Stat({
 }) {
   return (
     <div
-      className={`rounded-lg px-2 py-2.5 text-center ${boxClass}`}
+      className={`min-w-0 rounded-lg px-2 py-2.5 text-center ${boxClass}`}
       style={style}
     >
       <p className={`text-[16px] font-bold leading-none ${valueClass}`}>
@@ -70,7 +69,6 @@ function normalizeMonth(attendance) {
       totalWorkingHours: attendance.totalWorkingHours ?? 0,
       totalOvertimeHours: attendance.totalOvertimeHours ?? 0,
       totalLateMinutes: attendance.totalLateMinutes,
-      totalBreakMinutes: attendance.totalBreakMinutes,
       graceUsedMinutes: attendance.graceUsedMinutes,
     };
   }
@@ -78,9 +76,7 @@ function normalizeMonth(attendance) {
 }
 
 export function AttendanceMonthCard({ attendance }) {
-  const { hasFlag } = useModules();
   const { types } = useAttendanceTypes();
-  const breakEnabled = hasFlag("breakManagement");
   const month = normalizeMonth(attendance);
   if (!month) return null;
 
@@ -94,7 +90,7 @@ export function AttendanceMonthCard({ attendance }) {
     >
       {hasLegacyBreakdown ? (
         <>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
             <Stat label="Total Days" value={month.totalDays} />
             <TypeStat
               label="Present"
@@ -149,14 +145,9 @@ export function AttendanceMonthCard({ attendance }) {
               value={formatHoursMinutes(month.totalOvertimeHours)}
             />
           </div>
-          {breakEnabled ? (
-            <div className="mt-2">
-              <Stat label="Break Min" value={month.totalBreakMinutes ?? 0} />
-            </div>
-          ) : null}
         </>
       ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
           <Stat label="Total Days" value={month.totalDays} />
           <TypeStat
             label="Present"
@@ -181,9 +172,6 @@ export function AttendanceMonthCard({ attendance }) {
             label="Overtime"
             value={formatHoursMinutes(month.totalOvertimeHours)}
           />
-          {breakEnabled ? (
-            <Stat label="Break Min" value={month.totalBreakMinutes ?? 0} />
-          ) : null}
           <Stat label="Grace Used" value={month.graceUsedMinutes ?? 0} />
         </div>
       )}

@@ -6,10 +6,11 @@ const variants = {
   violet: "bg-[var(--lavender-soft)] text-[var(--violet)]",
 };
 
-export function Badge({ children, variant = "muted", className = "" }) {
+export function Badge({ children, variant = "muted", className = "", ...rest }) {
   return (
     <span
       className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold tracking-wide ${variants[variant] || variants.muted} ${className}`}
+      {...rest}
     >
       {children}
     </span>

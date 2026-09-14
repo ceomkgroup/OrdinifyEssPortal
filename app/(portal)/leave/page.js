@@ -1,5 +1,5 @@
-import { LeaveView } from "@/components/leave/LeaveView";
+import { redirect } from "next/navigation";
 
-export default function LeavePage() {
-  return <LeaveView />;
+export default function LeaveIndexPage() {
+  redirect("/leave/logs");
 }

@@ -41,6 +41,11 @@ function isDayShift(shift) {
   return hour >= 6 && hour < 18;
 }
 
+function isFlexibleShift(shift) {
+  const type = String(shift?.shiftType || "").toUpperCase();
+  return type.includes("FLEX");
+}
+
 export function ShiftCard({ shift, company, timeFormat = "12h" }) {
   if (!shift) {
     return (
@@ -54,13 +59,20 @@ export function ShiftCard({ shift, company, timeFormat = "12h" }) {
   const dayShift = isDayShift(shift);
   const ShiftIcon = dayShift ? Sun : Moon;
   const duration = getShiftDurationLabel(shift);
+  const flexible = isFlexibleShift(shift);
+  const hasTimes =
+    parseShiftMinutes(shift.startTime) != null &&
+    parseShiftMinutes(shift.endTime) != null;
   const typeLabel = shift.shiftType
     ? String(shift.shiftType).replace(/_/g, " ")
     : null;
 
   return (
-    <Card className="h-full" bodyClassName="flex h-full flex-col justify-between gap-3">
-      <div className="flex items-center justify-between gap-2">
+    <Card
+      className="h-full"
+      bodyClassName="flex h-full min-h-0 flex-col gap-3"
+    >
+      <div className="flex shrink-0 min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-2.5">
           {logo ? (
             <Image
@@ -72,27 +84,35 @@ export function ShiftCard({ shift, company, timeFormat = "12h" }) {
               unoptimized
             />
           ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--lavender-soft)] text-sm font-bold text-[var(--violet)]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--lavender-soft)] text-sm font-bold text-[var(--violet)]">
               {(company?.companyName || "C").slice(0, 1)}
             </div>
           )}
           <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold text-[var(--text)]">
+            <p
+              className="truncate text-[13px] font-semibold text-[var(--text)]"
+              title={company?.companyName || "Company"}
+            >
               {company?.companyName || "Company"}
             </p>
             <p className="text-[11px] text-[var(--muted)]">Current shift</p>
           </div>
         </div>
         {typeLabel ? (
-          <Badge variant="violet" className="shrink-0 rounded-full text-[10px]">
+          <Badge
+            variant="violet"
+            className="w-fit max-w-full shrink-0 truncate rounded-full text-[10px]"
+            title={typeLabel}
+          >
             {typeLabel}
           </Badge>
         ) : null}
       </div>
 
-      <div className="rounded-2xl border border-[var(--lavender)]/70 bg-gradient-to-br from-[var(--lavender-soft)] via-[var(--surface)] to-[var(--panel-soft)] px-3.5 py-3.5">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--surface)] shadow-sm">
+      {/* Grows with stretched grid height so tablet 2-col doesn't leave a dead gap */}
+      <div className="flex min-h-0 flex-1 flex-col justify-center gap-4 rounded-2xl border border-[var(--lavender)]/70 bg-gradient-to-br from-[var(--lavender-soft)] via-[var(--surface)] to-[var(--panel-soft)] px-3.5 py-4">
+        <div className="flex items-center gap-2.5">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--surface)] shadow-sm">
             <ShiftIcon
               className={`h-4 w-4 ${
                 dayShift ? "text-[var(--warning)]" : "text-[var(--violet)]"
@@ -103,42 +123,59 @@ export function ShiftCard({ shift, company, timeFormat = "12h" }) {
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
               {dayShift ? "Day shift" : "Night shift"}
+              {flexible ? " · Flexible" : ""}
             </p>
-            <p className="truncate text-[14px] font-semibold text-[var(--violet)]">
-              {shift.shiftName}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-3.5 flex items-center gap-2">
-          <div className="min-w-0 flex-1 rounded-xl bg-[var(--surface)] px-3 py-2.5 ring-1 ring-[var(--border)]">
-            <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-              <Clock3 className="h-3 w-3 text-[var(--violet)]" />
-              Start
-            </div>
-            <p className="mt-1 text-[16px] font-bold tabular-nums leading-none text-[var(--text)]">
-              {formatTime(shift.startTime, timeFormat)}
-            </p>
-          </div>
-
-          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--violet)] text-white shadow-sm">
-            <ArrowRight className="h-3.5 w-3.5" />
-          </span>
-
-          <div className="min-w-0 flex-1 rounded-xl bg-[var(--surface)] px-3 py-2.5 ring-1 ring-[var(--border)]">
-            <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-              <Clock3 className="h-3 w-3 text-[var(--violet)]" />
-              End
-            </div>
-            <p className="mt-1 text-[16px] font-bold tabular-nums leading-none text-[var(--text)]">
-              {formatTime(shift.endTime, timeFormat)}
+            <p
+              className="truncate text-[15px] font-semibold text-[var(--violet)]"
+              title={shift.shiftName}
+            >
+              {shift.shiftName || "Shift"}
             </p>
           </div>
         </div>
+
+        {hasTimes ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1 rounded-xl bg-[var(--surface)] px-2.5 py-3 ring-1 ring-[var(--border)] sm:px-3">
+              <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                <Clock3 className="h-3 w-3 shrink-0 text-[var(--violet)]" />
+                Start
+              </div>
+              <p className="mt-1.5 truncate text-[14px] font-bold tabular-nums leading-none text-[var(--text)] sm:text-[16px]">
+                {formatTime(shift.startTime, timeFormat)}
+              </p>
+            </div>
+
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--violet)] text-white shadow-sm">
+              <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+
+            <div className="min-w-0 flex-1 rounded-xl bg-[var(--surface)] px-2.5 py-3 ring-1 ring-[var(--border)] sm:px-3">
+              <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                <Clock3 className="h-3 w-3 shrink-0 text-[var(--violet)]" />
+                End
+              </div>
+              <p className="mt-1.5 truncate text-[14px] font-bold tabular-nums leading-none text-[var(--text)] sm:text-[16px]">
+                {formatTime(shift.endTime, timeFormat)}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl bg-[var(--surface)]/90 px-3 py-3 ring-1 ring-[var(--border)]">
+            <p className="text-[12px] font-semibold text-[var(--text)]">
+              {flexible ? "Flexible hours" : "No fixed timings"}
+            </p>
+            <p className="mt-1 text-[11px] leading-snug text-[var(--muted)]">
+              {flexible
+                ? "Start and end times are not fixed for this shift."
+                : "Shift window is not set for today."}
+            </p>
+          </div>
+        )}
       </div>
 
       {duration ? (
-        <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2">
+        <div className="flex shrink-0 items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2">
           <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--muted)]">
             <Timer className="h-3.5 w-3.5 text-[var(--violet)]" />
             Duration

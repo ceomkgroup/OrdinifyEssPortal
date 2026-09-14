@@ -15,6 +15,7 @@ import {
   canShowRequestTile,
   canShowDocumentTile,
   canShowAssetTile,
+  canShowLeaveTile,
   canShowWidget,
   hasAnyScreen,
   hasFlag,
@@ -116,6 +117,7 @@ export function ModulesProvider({ children }) {
       canShowRequestTile: (key) => canShowRequestTile(modules, key),
       canShowDocumentTile: (key) => canShowDocumentTile(modules, key),
       canShowAssetTile: (key) => canShowAssetTile(modules, key),
+      canShowLeaveTile: (key) => canShowLeaveTile(modules, key),
     }),
     [modules, raw, loading, error, refetch]
   );

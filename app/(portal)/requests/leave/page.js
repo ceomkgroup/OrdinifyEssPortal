@@ -1,27 +1,15 @@
 "use client";
 
-import { LeaveView } from "@/components/leave/LeaveView";
-import { useModules } from "@/components/modules/ModulesProvider";
-import { ComingSoon } from "@/components/ui/ComingSoon";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PageLoader } from "@/components/ui/Spinner";
 
-export default function LeaveRequestPage() {
-  const { canShowRequestTile, loading } = useModules();
-
-  if (loading) {
-    return (
-      <PageLoader label="Loading leave" hint="Checking leave module access…" />
-    );
-  }
-
-  if (!canShowRequestTile("leave")) {
-    return (
-      <ComingSoon
-        title="Leave Request"
-        description="Leave module is not enabled for your company."
-      />
-    );
-  }
-
-  return <LeaveView initialTab="requests" />;
+export default function LeaveRequestRedirectPage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/leave/logs");
+  }, [router]);
+  return (
+    <PageLoader label="Opening leave logs" hint="Taking you to Leave Logs…" />
+  );
 }

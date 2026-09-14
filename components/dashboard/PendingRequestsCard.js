@@ -45,7 +45,7 @@ export function PendingRequestsCard({ pendingRequests }) {
 
   return (
     <Card title="Pending Requests" className="h-full" bodyClassName="flex flex-col">
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {tiles.map(({ key, label, icon: Icon, tone }) => {
           const count = pendingRequests[key] ?? 0;
           const href = getRequestTypeByKey(key)?.href || "/requests";
@@ -53,14 +53,16 @@ export function PendingRequestsCard({ pendingRequests }) {
             <Link
               key={key}
               href={href}
-              className="flex flex-col items-center gap-1.5 rounded-lg bg-[var(--panel-soft)] px-1.5 py-2.5 text-center transition hover:bg-[var(--lavender-soft)]"
+              className="flex min-w-0 flex-col items-center gap-1.5 rounded-lg bg-[var(--panel-soft)] px-1.5 py-2.5 text-center transition hover:bg-[var(--lavender-soft)]"
             >
               <span
                 className={`flex h-8 w-8 items-center justify-center rounded-full ${tone}`}
               >
                 <Icon className="h-3.5 w-3.5" strokeWidth={1.9} />
               </span>
-              <p className="text-[10px] leading-tight text-[var(--muted)]">{label}</p>
+              <p className="min-w-0 w-full truncate text-[10px] leading-tight text-[var(--muted)]" title={label}>
+                {label}
+              </p>
               <p className="text-[13px] font-bold text-[var(--text)]">{count}</p>
             </Link>
           );

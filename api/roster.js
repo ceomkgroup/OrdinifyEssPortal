@@ -67,19 +67,35 @@ function eachDateKeys(fromKey, toKey) {
 function classifyDay(row, shiftType, shiftName) {
   const type = String(shiftType || "").toUpperCase().replace(/\s+/g, "_");
   const name = String(shiftName || "").toLowerCase();
-  const status = String(row?.effectiveStatus || row?.status || "").toLowerCase();
+  const status = String(row?.effectiveStatus || row?.status || "")
+    .toLowerCase()
+    .trim();
+  // Portal roster: dayType "off" | "work" (+ holiday variants)
+  const dayType = String(row?.dayType || row?.day_type || "")
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_")
+    .trim();
 
   if (
     row?.isHoliday === true ||
+    dayType === "holiday" ||
     type.includes("HOLIDAY") ||
-    name.includes("holiday")
+    name.includes("holiday") ||
+    status.includes("holiday")
   ) {
     return { dayKind: "holiday", isOff: true, isHoliday: true };
   }
 
+  // Rest / week-off — prefer dayType + status (API still sends shiftId/name on offs)
   if (
     row?.isWeekOff === true ||
     row?.isOff === true ||
+    dayType === "off" ||
+    dayType === "rest" ||
+    dayType === "week_off" ||
+    dayType === "weekoff" ||
+    dayType === "day_off" ||
+    dayType === "dayoff" ||
     type.includes("WEEK_OFF") ||
     type.includes("WEEKOFF") ||
     type === "OFF" ||
@@ -87,7 +103,12 @@ function classifyDay(row, shiftType, shiftName) {
     type.includes("DAY_OFF") ||
     name.includes("day off") ||
     name.includes("week off") ||
-    status === "off"
+    name.includes("rest day") ||
+    status === "off" ||
+    status.includes("week off") ||
+    status.includes("day off") ||
+    status.includes("rest") ||
+    status === "wo"
   ) {
     return { dayKind: "weekOff", isOff: true, isHoliday: false };
   }
@@ -150,10 +171,10 @@ export function expandRosterAssignment(row, index = 0) {
     row.shiftCode,
     row.shift?.shiftCode
   );
+  // Do not use dayType as shiftType — offs still carry FIXED_SHIFT + shiftName.
   const shiftType = pick(
     row.shiftType,
     row.shift?.shiftType,
-    row.dayType,
     row.rosterType,
     row.type
   );
@@ -166,19 +187,21 @@ export function expandRosterAssignment(row, index = 0) {
     row.scheduleId
   );
 
+  const offLabel = isHoliday ? "Holiday" : "Rest Day";
+
   return eachDateKeys(fromKey, toKey).map((date) => ({
     id: `${assignmentId || "asg"}-${date}-${index}`,
     assignmentId: assignmentId || null,
     date,
     effectiveFrom: fromKey,
     effectiveTo: toKey || fromKey,
-    shiftId: pick(row.shiftId, row.shift?.shiftId, row.shift?.id),
-    shiftName:
-      shiftName ||
-      (isHoliday ? "Holiday" : isOff ? "Day Off" : "—"),
-    shiftCode: pick(row.shiftCode, row.shift?.shiftCode),
-    shiftType: prettyShiftType(shiftType) || (isOff ? "Day Off" : "Working"),
-    shiftTypeRaw: shiftType || null,
+    shiftId: isOff
+      ? null
+      : pick(row.shiftId, row.shift?.shiftId, row.shift?.id),
+    shiftName: isOff ? offLabel : shiftName || "—",
+    shiftCode: isOff ? null : pick(row.shiftCode, row.shift?.shiftCode),
+    shiftType: isOff ? offLabel : prettyShiftType(shiftType) || "Working",
+    shiftTypeRaw: isOff ? (isHoliday ? "HOLIDAY" : "REST") : shiftType || null,
     startTime: isOff ? null : startTime,
     endTime: isOff ? null : endTime,
     lateInGracePeriodMinutes: Number(row.lateInGracePeriodMinutes || 0),

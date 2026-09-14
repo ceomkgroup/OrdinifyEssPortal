@@ -151,7 +151,7 @@ export function getNotificationHref(row) {
     case "overtime":
       return "/requests/overtime";
     case "leave":
-      return "/requests/leave";
+      return "/leave/logs";
     case "shift_change":
       return "/requests/shift-change";
     case "comp_off":

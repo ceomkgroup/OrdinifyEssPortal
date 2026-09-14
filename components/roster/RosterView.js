@@ -140,7 +140,7 @@ function ShiftPill({ row }) {
         <div className="flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--lavender)]" />
           <span className="truncate text-[11px] font-semibold text-[var(--violet)]">
-            {row.isHoliday ? "Holiday" : "Day Off"}
+            {row.isHoliday ? "Holiday" : "Rest Day"}
           </span>
         </div>
       </div>
@@ -342,7 +342,7 @@ export function RosterView() {
           </span>
           <span className="inline-flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-[var(--lavender)]" />
-            Off / Holiday
+            Rest Day / Holiday
           </span>
           <span className="inline-flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-[#c4c4c4]" />
@@ -526,17 +526,31 @@ export function RosterView() {
               </p>
             ) : (
               <div className="mt-3 space-y-3">
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--success)]/25 bg-[var(--success-soft)] px-3 py-2.5">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--success)]" />
-                    <span className="truncate text-[14px] font-bold capitalize text-[var(--success)]">
-                      {selectedRow.shiftName}
+                {selectedRow.isOff || selectedRow.isHoliday ? (
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--violet)]/15 bg-[var(--lavender-soft)] px-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--lavender)]" />
+                      <span className="truncate text-[14px] font-bold text-[var(--violet)]">
+                        {selectedRow.isHoliday ? "Holiday" : "Rest Day"}
+                      </span>
+                    </div>
+                    <span className="shrink-0 rounded-md bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--violet)] ring-1 ring-[var(--border)]">
+                      {selectedRow.isHoliday ? "Holiday" : "Off"}
                     </span>
                   </div>
-                  <span className="shrink-0 rounded-md bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--violet)] ring-1 ring-[var(--border)]">
-                    {selectedRow.shiftTypeRaw || selectedRow.shiftType}
-                  </span>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--success)]/25 bg-[var(--success-soft)] px-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--success)]" />
+                      <span className="truncate text-[14px] font-bold capitalize text-[var(--success)]">
+                        {selectedRow.shiftName}
+                      </span>
+                    </div>
+                    <span className="shrink-0 rounded-md bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--violet)] ring-1 ring-[var(--border)]">
+                      {selectedRow.shiftTypeRaw || selectedRow.shiftType}
+                    </span>
+                  </div>
+                )}
 
                 {!selectedRow.isOff ? (
                   <>
@@ -583,7 +597,7 @@ export function RosterView() {
                   </>
                 ) : (
                   <p className="text-[12px] text-[var(--muted)]">
-                    No working hours on this day.
+                    No shift assigned — this is a rest day.
                   </p>
                 )}
               </div>
@@ -611,10 +625,10 @@ export function RosterView() {
               />
               <SummaryRow
                 icon={CalendarDays}
-                label="On Leave Days"
+                label="Rest Days"
                 value={String(stats.leave)}
-                soft="bg-[var(--warning-soft)]"
-                tone="text-[var(--warning)]"
+                soft="bg-[var(--lavender-soft)]"
+                tone="text-[var(--violet)]"
               />
               <SummaryRow
                 icon={Umbrella}

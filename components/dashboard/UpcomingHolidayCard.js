@@ -107,24 +107,27 @@ export function UpcomingHolidayCard({ holidays = [], dateFormat }) {
                 </span>
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <p className="truncate text-[13px] font-semibold text-[var(--text)]">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <p
+                      className="min-w-0 truncate text-[13px] font-semibold text-[var(--text)]"
+                      title={holiday.title || "Holiday"}
+                    >
                       {holiday.title || "Holiday"}
                     </p>
                     {isNext ? (
-                      <span className="rounded-full bg-[var(--violet)] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+                      <span className="shrink-0 rounded-full bg-[var(--violet)] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
                         Next
                       </span>
                     ) : null}
                   </div>
 
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
                     {holiday.holidayType ? (
                       <span className="rounded-full bg-[var(--muted-bg)] px-2 py-0.5 text-[10px] font-semibold capitalize text-[var(--muted)]">
                         {holiday.holidayType}
                       </span>
                     ) : null}
-                    <span className="text-[11px] text-[var(--muted)]">
+                    <span className="min-w-0 break-words text-[11px] text-[var(--muted)]">
                       {dateLabel}
                     </span>
                   </div>

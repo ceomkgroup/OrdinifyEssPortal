@@ -11,8 +11,25 @@ import {
   listLeaveRequests,
 } from "@/api/leave";
 import { useModules } from "@/components/modules/ModulesProvider";
+import {
+  emptyRequestStats,
+  statsFromListResponse,
+} from "@/lib/request-stats";
 
-export function useLeavePage() {
+const EMPTY_STATS = emptyRequestStats();
+
+/**
+ * Leave data hooks — load only what the active screen needs.
+ * - logs → leave requests
+ * - encashment → encashment list
+ * - balance → leave balance
+ * Forms can call ensureBalances() when they open.
+ */
+export function useLeavePage({
+  loadBalance = false,
+  loadRequests = false,
+  loadEncashment = false,
+} = {}) {
   const { hasFlag } = useModules();
   const flagEncashment = hasFlag("allowLeaveEncashment");
 
@@ -20,7 +37,7 @@ export function useLeavePage() {
   const [fiscalYear, setFiscalYear] = useState(currentYear);
 
   const [balances, setBalances] = useState([]);
-  const [balanceLoading, setBalanceLoading] = useState(true);
+  const [balanceLoading, setBalanceLoading] = useState(Boolean(loadBalance));
 
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
@@ -32,7 +49,8 @@ export function useLeavePage() {
     limit: 10,
     totalPages: 1,
   });
-  const [requestsLoading, setRequestsLoading] = useState(true);
+  const [requestsLoading, setRequestsLoading] = useState(Boolean(loadRequests));
+  const [requestStats, setRequestStats] = useState(EMPTY_STATS);
 
   const [encashStatus, setEncashStatus] = useState("all");
   const [encashPage, setEncashPage] = useState(1);
@@ -44,9 +62,12 @@ export function useLeavePage() {
     limit: 10,
     totalPages: 1,
   });
+  const [encashStats, setEncashStats] = useState(EMPTY_STATS);
   const [encashDisabled, setEncashDisabled] = useState(false);
   const [encashMessage, setEncashMessage] = useState("");
-  const [encashLoading, setEncashLoading] = useState(true);
+  const [encashLoading, setEncashLoading] = useState(
+    Boolean(loadEncashment && flagEncashment)
+  );
   const [encashProbed, setEncashProbed] = useState(false);
 
   const [error, setError] = useState("");
@@ -56,7 +77,40 @@ export function useLeavePage() {
     setReloadTick((n) => n + 1);
   }, []);
 
+  const fetchBalances = useCallback(
+    async ({ year = fiscalYear, force = false } = {}) => {
+      if (!force && balances.length > 0 && year === fiscalYear) {
+        return balances;
+      }
+      setBalanceLoading(true);
+      try {
+        const rows = await getLeaveBalance({ fiscalYear: year });
+        setBalances(rows);
+        return rows;
+      } catch (err) {
+        setBalances([]);
+        throw err;
+      } finally {
+        setBalanceLoading(false);
+      }
+    },
+    [balances, fiscalYear]
+  );
+
+  const ensureBalances = useCallback(async () => {
+    try {
+      return await fetchBalances({ force: balances.length === 0 });
+    } catch {
+      return [];
+    }
+  }, [fetchBalances, balances.length]);
+
   useEffect(() => {
+    if (!loadBalance) {
+      setBalanceLoading(false);
+      return undefined;
+    }
+
     let alive = true;
     queueMicrotask(() => {
       if (alive) {
@@ -67,7 +121,10 @@ export function useLeavePage() {
 
     (async () => {
       try {
-        const rows = await getLeaveBalance({ fiscalYear });
+        const rows = await getLeaveBalance({
+          fiscalYear,
+          force: reloadTick > 0,
+        });
         if (!alive) return;
         setBalances(rows);
       } catch (err) {
@@ -82,9 +139,15 @@ export function useLeavePage() {
     return () => {
       alive = false;
     };
-  }, [fiscalYear, reloadTick]);
+  }, [fiscalYear, reloadTick, loadBalance]);
 
   useEffect(() => {
+    if (!loadRequests) {
+      setRequestsLoading(false);
+      setRequestStats(EMPTY_STATS);
+      return undefined;
+    }
+
     let alive = true;
     queueMicrotask(() => {
       if (alive) setRequestsLoading(true);
@@ -92,10 +155,20 @@ export function useLeavePage() {
 
     (async () => {
       try {
-        const res = await listLeaveRequests({ status, page, limit });
+        const res = await listLeaveRequests({
+          status,
+          page,
+          limit,
+          force: reloadTick > 0,
+        });
         if (!alive) return;
-        setRequests(res.rows);
-        setMeta(res.meta || { total: 0, page, limit, totalPages: 1 });
+        const list = res.rows || [];
+        const nextMeta = res.meta || { total: 0, page, limit, totalPages: 1 };
+        setRequests(list);
+        setMeta(nextMeta);
+        setRequestStats((prev) =>
+          statsFromListResponse(prev, list, nextMeta, status)
+        );
       } catch (err) {
         if (!alive) return;
         setError(err.message || "Failed to load leave requests");
@@ -108,16 +181,16 @@ export function useLeavePage() {
     return () => {
       alive = false;
     };
-  }, [status, page, limit, reloadTick]);
+  }, [status, page, limit, reloadTick, loadRequests]);
 
-  // Encashment list — only when company flag allows (skip extra API on leave page).
   useEffect(() => {
-    if (!flagEncashment) {
+    if (!loadEncashment || !flagEncashment) {
       setEncashLoading(false);
-      setEncashDisabled(true);
+      setEncashDisabled(!flagEncashment);
       setEncashProbed(true);
       setEncashRows([]);
       setEncashMessage("");
+      setEncashStats(EMPTY_STATS);
       return undefined;
     }
 
@@ -133,24 +206,33 @@ export function useLeavePage() {
           status: encashStatus,
           page: encashPage,
           limit: encashLimit,
+          force: reloadTick > 0,
         });
         if (!alive) return;
-        setEncashRows(res.rows || []);
-        setEncashMeta(
+        const list = res.rows || [];
+        const nextMeta =
           res.meta || {
             total: 0,
             page: encashPage,
             limit: encashLimit,
             totalPages: 1,
-          }
+          };
+        setEncashRows(list);
+        setEncashMeta(nextMeta);
+        setEncashStats((prev) =>
+          statsFromListResponse(prev, list, nextMeta, encashStatus)
         );
         setEncashDisabled(Boolean(res.disabled));
         setEncashMessage(res.message || "");
       } catch (err) {
         if (!alive) return;
-        // Soft-fail: don't block leave page if encashment errors
         setEncashRows([]);
-        setEncashDisabled(true);
+        setEncashMeta({
+          total: 0,
+          page: encashPage,
+          limit: encashLimit,
+          totalPages: 1,
+        });
         setEncashMessage(err.message || "Failed to load encashment requests");
       } finally {
         if (alive) {
@@ -163,11 +245,18 @@ export function useLeavePage() {
     return () => {
       alive = false;
     };
-  }, [flagEncashment, encashStatus, encashPage, encashLimit, reloadTick]);
+  }, [
+    loadEncashment,
+    flagEncashment,
+    encashStatus,
+    encashPage,
+    encashLimit,
+    reloadTick,
+  ]);
 
-  // Show encashment when modules flag is on, OR API confirms it is enabled.
-  const encashmentEnabled =
-    flagEncashment || (encashProbed && !encashDisabled);
+  const showEncashment =
+    loadEncashment &&
+    (flagEncashment || (encashProbed && !encashDisabled));
 
   const submitLeave = useCallback(
     async (payload) => {
@@ -187,7 +276,6 @@ export function useLeavePage() {
     [refetch]
   );
 
-  /** Edit = cancel pending + create new (no dedicated update API). */
   const updateLeave = useCallback(
     async (requestId, payload) => {
       await cancelLeaveRequest(requestId);
@@ -231,6 +319,7 @@ export function useLeavePage() {
     setFiscalYear,
     balances,
     balanceLoading,
+    ensureBalances,
     status,
     setStatusFilter,
     page,
@@ -239,8 +328,9 @@ export function useLeavePage() {
     setLimit,
     requests,
     meta,
+    requestStats,
     requestsLoading,
-    encashmentEnabled,
+    encashmentEnabled: showEncashment,
     encashStatus,
     setEncashStatusFilter,
     encashPage,
@@ -249,6 +339,7 @@ export function useLeavePage() {
     setEncashLimit,
     encashRows,
     encashMeta,
+    encashStats,
     encashDisabled,
     encashMessage,
     encashLoading,

@@ -11,15 +11,20 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { formatDate, getDisplayName } from "@/lib/format";
 
-function MetaTile({ icon: Icon, label, value }) {
+function MetaTile({ icon: Icon, label, value, className = "" }) {
   if (!value) return null;
   return (
-    <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5">
+    <div
+      className={`min-w-0 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5 ${className}`}
+    >
       <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-        <Icon className="h-3 w-3 text-[var(--violet)]" strokeWidth={2} />
+        <Icon className="h-3 w-3 shrink-0 text-[var(--violet)]" strokeWidth={2} />
         {label}
       </div>
-      <p className="mt-1 truncate text-[12px] font-semibold text-[var(--text)]" title={String(value)}>
+      <p
+        className="mt-1 line-clamp-2 break-words text-[12px] font-semibold leading-snug text-[var(--text)]"
+        title={String(value)}
+      >
         {value}
       </p>
     </div>
@@ -61,7 +66,14 @@ export function ProfileCard({ employee, dateFormat }) {
           </div>
 
           {employee.designationName ? (
-            <p className="mt-2 truncate text-[13px] font-medium text-[var(--text)]">
+            <p
+              className="mt-2 line-clamp-2 text-[13px] font-medium leading-snug text-[var(--text)]"
+              title={
+                employee.departmentName
+                  ? `${employee.designationName} · ${employee.departmentName}`
+                  : employee.designationName
+              }
+            >
               {employee.designationName}
               {employee.departmentName ? (
                 <span className="font-normal text-[var(--muted)]">
@@ -106,6 +118,7 @@ export function ProfileCard({ employee, dateFormat }) {
             icon={UserRound}
             label="Manager"
             value={employee.managerName}
+            className="sm:col-span-2"
           />
         ) : null}
       </div>

@@ -83,7 +83,7 @@ export function DashboardView() {
 
   return (
     <>
-      <div className="mb-4 flex flex-col gap-1 md:mb-5">
+      <div className="mb-3 flex min-w-0 flex-col gap-1 sm:mb-4 md:mb-5">
         <h1 className="heading-page">
           {greetingByHour()}, {firstName}
         </h1>
@@ -92,8 +92,8 @@ export function DashboardView() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]">
+      <div className="flex min-w-0 flex-col gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-2 2xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]">
           <ProfileCard
             employee={data.employee}
             dateFormat={settings.dateFormat}
@@ -146,8 +146,14 @@ export function DashboardView() {
 
         {midCount > 0 ? (
           <div
-            className={`grid grid-cols-1 items-stretch gap-4 ${
-              midCount >= 3 ? "xl:grid-cols-3" : midCount === 2 ? "xl:grid-cols-2" : ""
+            className={`grid grid-cols-1 items-stretch gap-3 sm:gap-4 ${
+              midCount >= 2 ? "md:grid-cols-2" : ""
+            } ${
+              midCount >= 3
+                ? "2xl:grid-cols-3"
+                : midCount === 2
+                  ? "xl:grid-cols-2"
+                  : ""
             }`}
           >
             {showLeave ? <LeaveBalanceCard leave={data.leave} /> : null}
@@ -162,9 +168,11 @@ export function DashboardView() {
 
         {bottomCount > 0 ? (
           <div
-            className={`grid grid-cols-1 items-stretch gap-4 ${
+            className={`grid grid-cols-1 items-stretch gap-3 sm:gap-4 ${
+              bottomCount >= 2 ? "lg:grid-cols-2" : ""
+            } ${
               bottomCount >= 3
-                ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,1.35fr)]"
+                ? "2xl:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,1.35fr)]"
                 : bottomCount === 2
                   ? "xl:grid-cols-2"
                   : ""
@@ -185,9 +193,9 @@ export function DashboardView() {
 
         {showPayslip || showSettings ? (
           <div
-            className={`grid grid-cols-1 items-stretch gap-4 ${
+            className={`grid grid-cols-1 items-stretch gap-3 sm:gap-4 ${
               showPayslip && showSettings
-                ? "xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
+                ? "lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
                 : ""
             }`}
           >

@@ -11,6 +11,7 @@ import {
   MoreVertical,
   Plus,
   RefreshCw,
+  SearchX,
   Send,
   X,
 } from "lucide-react";
@@ -31,9 +32,15 @@ import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { TablePanel } from "@/components/ui/TablePanel";
+import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
+import { LeaveBalanceBoard } from "@/components/leave/LeaveBalanceBoard";
 import { useLeavePage } from "@/hooks/useLeave";
 import { useLeaveTypes } from "@/hooks/useLeaveTypes";
 import { formatDate, formatDateTime, rowSerial } from "@/lib/format";
+import {
+  countActiveDateFilters,
+  rowMatchesDateRange,
+} from "@/lib/request-date-filter";
 
 const fieldClass =
   "mt-1.5 h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]";
@@ -223,57 +230,61 @@ function LeaveRequestRowActions({
 
       {open && typeof document !== "undefined"
         ? createPortal(
-            <div
-              data-leave-menu={requestId}
-              className="fixed z-[9999] w-44 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
-              style={{ top: coords.top, left: coords.left }}
+          <div
+            data-leave-menu={requestId}
+            className="fixed z-[9999] w-44 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
+            style={{ top: coords.top, left: coords.left }}
+          >
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text)] hover:bg-[var(--panel-soft)]"
+              onClick={() => {
+                setOpen(false);
+                onView?.();
+              }}
             >
+              <Eye className="h-4 w-4 text-[var(--violet)]" />
+              View
+            </button>
+            {canEdit ? (
               <button
                 type="button"
                 className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text)] hover:bg-[var(--panel-soft)]"
                 onClick={() => {
                   setOpen(false);
-                  onView?.();
+                  onEdit?.();
                 }}
               >
-                <Eye className="h-4 w-4 text-[var(--violet)]" />
-                View
+                <FilePenLine className="h-4 w-4 text-[var(--violet)]" />
+                Edit
               </button>
-              {canEdit ? (
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text)] hover:bg-[var(--panel-soft)]"
-                  onClick={() => {
-                    setOpen(false);
-                    onEdit?.();
-                  }}
-                >
-                  <FilePenLine className="h-4 w-4 text-[var(--violet)]" />
-                  Edit
-                </button>
-              ) : null}
-              {canCancel ? (
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-[var(--danger-soft)]"
-                  onClick={() => {
-                    setOpen(false);
-                    onCancel?.();
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                  Cancel
-                </button>
-              ) : null}
-            </div>,
-            document.body
-          )
+            ) : null}
+            {canCancel ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-[var(--danger-soft)]"
+                onClick={() => {
+                  setOpen(false);
+                  onCancel?.();
+                }}
+              >
+                <X className="h-4 w-4" />
+                Cancel
+              </button>
+            ) : null}
+          </div>,
+          document.body
+        )
         : null}
     </>
   );
 }
 
-export function LeaveView({ initialTab = "requests" }) {
+export function LeaveView({ section = "logs" }) {
+  const isLogs = section === "logs";
+  const isEncashment = section === "encashment";
+  const isBalance = section === "balance";
+
   const {
     fiscalYear,
     setFiscalYear,
@@ -287,6 +298,7 @@ export function LeaveView({ initialTab = "requests" }) {
     setLimit,
     requests,
     meta,
+    requestStats,
     requestsLoading,
     encashmentEnabled,
     encashStatus,
@@ -297,24 +309,36 @@ export function LeaveView({ initialTab = "requests" }) {
     setEncashLimit,
     encashRows,
     encashMeta,
+    encashStats,
     encashDisabled,
     encashMessage,
     encashLoading,
     error,
     setError,
     refetch,
+    ensureBalances,
     submitLeave,
     cancelLeave,
     updateLeave,
     submitEncashment,
     cancelEncashment,
-  } = useLeavePage();
+  } = useLeavePage({
+    loadBalance: isBalance,
+    loadRequests: isLogs,
+    loadEncashment: isEncashment,
+  });
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [encashOpen, setEncashOpen] = useState(false);
 
   const {
     types: leaveTypes,
     filterOptions: leaveTypeFilterOptions,
     loading: leaveTypesLoading,
-  } = useLeaveTypes();
+  } = useLeaveTypes({
+    // Dropdown only when filters / apply forms need it — not on balance screen.
+    enabled: isLogs || isEncashment || formOpen || encashOpen,
+  });
 
   const { searchParams } = usePortalQuery();
   const currentYear = new Date().getFullYear();
@@ -323,12 +347,16 @@ export function LeaveView({ initialTab = "requests" }) {
       status: "all",
       q: "",
       leaveType: "all",
+      from: "",
+      to: "",
       fy: String(currentYear),
       page: "1",
       limit: "10",
       encashStatus: "all",
       encashQ: "",
       encashType: "all",
+      encashFrom: "",
+      encashTo: "",
       encashPage: "1",
       encashLimit: "10",
     }),
@@ -336,7 +364,6 @@ export function LeaveView({ initialTab = "requests" }) {
   );
   const urlBootRef = useRef(false);
 
-  const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(emptyLeaveForm);
   const [editingRequestId, setEditingRequestId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -344,7 +371,6 @@ export function LeaveView({ initialTab = "requests" }) {
   const [cancellingId, setCancellingId] = useState("");
   const [detail, setDetail] = useState(null);
 
-  const [encashOpen, setEncashOpen] = useState(false);
   const [encashForm, setEncashForm] = useState(emptyEncashForm);
   const [encashSaving, setEncashSaving] = useState(false);
   const [encashCancellingId, setEncashCancellingId] = useState("");
@@ -356,6 +382,14 @@ export function LeaveView({ initialTab = "requests" }) {
     readQueryString(searchParams, "leaveType", "all")
   );
   const [draftLeaveType, setDraftLeaveType] = useState(leaveTypeFilter);
+  const [dateFrom, setDateFrom] = useState(() =>
+    readQueryString(searchParams, "from", "")
+  );
+  const [dateTo, setDateTo] = useState(() =>
+    readQueryString(searchParams, "to", "")
+  );
+  const [draftDateFrom, setDraftDateFrom] = useState(dateFrom);
+  const [draftDateTo, setDraftDateTo] = useState(dateTo);
   const [encashQuery, setEncashQuery] = useState(() =>
     readQueryString(searchParams, "encashQ", "")
   );
@@ -363,6 +397,16 @@ export function LeaveView({ initialTab = "requests" }) {
     readQueryString(searchParams, "encashType", "all")
   );
   const [draftEncashType, setDraftEncashType] = useState(encashTypeFilter);
+  const [encashDateFrom, setEncashDateFrom] = useState(() =>
+    readQueryString(searchParams, "encashFrom", "")
+  );
+  const [encashDateTo, setEncashDateTo] = useState(() =>
+    readQueryString(searchParams, "encashTo", "")
+  );
+  const [draftEncashDateFrom, setDraftEncashDateFrom] =
+    useState(encashDateFrom);
+  const [draftEncashDateTo, setDraftEncashDateTo] = useState(encashDateTo);
+  const [balanceQuery, setBalanceQuery] = useState("");
   const [draftFiscalYear, setDraftFiscalYear] = useState(String(fiscalYear));
 
   useEffect(() => {
@@ -392,12 +436,16 @@ export function LeaveView({ initialTab = "requests" }) {
       status,
       q: listQuery,
       leaveType: leaveTypeFilter,
+      from: dateFrom,
+      to: dateTo,
       fy: fiscalYear,
       page,
       limit,
       encashStatus,
       encashQ: encashQuery,
       encashType: encashTypeFilter,
+      encashFrom: encashDateFrom,
+      encashTo: encashDateTo,
       encashPage,
       encashLimit,
     },
@@ -406,12 +454,16 @@ export function LeaveView({ initialTab = "requests" }) {
       status,
       listQuery,
       leaveTypeFilter,
+      dateFrom,
+      dateTo,
       fiscalYear,
       page,
       limit,
       encashStatus,
       encashQuery,
       encashTypeFilter,
+      encashDateFrom,
+      encashDateTo,
       encashPage,
       encashLimit,
     ]
@@ -426,10 +478,27 @@ export function LeaveView({ initialTab = "requests" }) {
   }, [encashTypeFilter]);
 
   useEffect(() => {
+    setDraftDateFrom(dateFrom);
+    setDraftDateTo(dateTo);
+  }, [dateFrom, dateTo]);
+
+  useEffect(() => {
+    setDraftEncashDateFrom(encashDateFrom);
+    setDraftEncashDateTo(encashDateTo);
+  }, [encashDateFrom, encashDateTo]);
+
+  useEffect(() => {
     setDraftFiscalYear(String(fiscalYear));
   }, [fiscalYear]);
 
   const statusTabs = [
+    { value: "all", label: "All" },
+    { value: "pending", label: "Pending" },
+    { value: "approved", label: "Approved" },
+    { value: "cancelled", label: "Cancelled" },
+  ];
+  // Encashment API: pending | approved | rejected (no cancelled filter value).
+  const encashStatusTabs = [
     { value: "all", label: "All" },
     { value: "pending", label: "Pending" },
     { value: "approved", label: "Approved" },
@@ -447,10 +516,15 @@ export function LeaveView({ initialTab = "requests" }) {
   );
 
   const fyFilterActive = Number(fiscalYear) !== currentYear;
+  const leaveDateFilterCount = countActiveDateFilters(dateFrom, dateTo);
+  const encashDateFilterCount = countActiveDateFilters(
+    encashDateFrom,
+    encashDateTo
+  );
   const leaveListFilterCount =
-    (leaveTypeFilter !== "all" ? 1 : 0) + (fyFilterActive ? 1 : 0);
+    (leaveTypeFilter !== "all" ? 1 : 0) + leaveDateFilterCount;
   const encashListFilterCount =
-    (encashTypeFilter !== "all" ? 1 : 0) + (fyFilterActive ? 1 : 0);
+    (encashTypeFilter !== "all" ? 1 : 0) + encashDateFilterCount;
 
   const totals = useMemo(() => {
     return balances.reduce(
@@ -544,6 +618,16 @@ export function LeaveView({ initialTab = "requests" }) {
       ) {
         return false;
       }
+      if (
+        !rowMatchesDateRange(row, dateFrom, dateTo, [
+          "fromDate",
+          "toDate",
+          "createdAt",
+          "submittedAt",
+        ])
+      ) {
+        return false;
+      }
       if (!q) return true;
       const hay = [
         row.leaveTypeName,
@@ -558,7 +642,7 @@ export function LeaveView({ initialTab = "requests" }) {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [requests, listQuery, leaveTypeFilter]);
+  }, [requests, listQuery, leaveTypeFilter, dateFrom, dateTo]);
 
   const filteredEncashRows = useMemo(() => {
     const q = encashQuery.trim().toLowerCase();
@@ -566,6 +650,17 @@ export function LeaveView({ initialTab = "requests" }) {
       if (
         encashTypeFilter !== "all" &&
         String(row.leaveTypeId || "") !== encashTypeFilter
+      ) {
+        return false;
+      }
+      if (
+        !rowMatchesDateRange(row, encashDateFrom, encashDateTo, [
+          "createdAt",
+          "submittedAt",
+          "requestedAt",
+          "fromDate",
+          "toDate",
+        ])
       ) {
         return false;
       }
@@ -582,7 +677,26 @@ export function LeaveView({ initialTab = "requests" }) {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [encashRows, encashQuery, encashTypeFilter]);
+  }, [
+    encashRows,
+    encashQuery,
+    encashTypeFilter,
+    encashDateFrom,
+    encashDateTo,
+  ]);
+
+  const filteredBalances = useMemo(() => {
+    const q = balanceQuery.trim().toLowerCase();
+    return (balances || []).filter((row) => {
+      if (!q) return true;
+      const name = leaveTypeName(row.leaveTypeId, leaveTypes, balances);
+      const hay = [name, row.leaveTypeName, row.leaveTypeId]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [balances, balanceQuery, leaveTypes]);
 
   const requestColumns = useMemo(
     () => [
@@ -801,6 +915,7 @@ export function LeaveView({ initialTab = "requests" }) {
     setFormOpen(true);
     setMessage("");
     setError("");
+    ensureBalances();
   }
 
   function openEdit(row) {
@@ -821,6 +936,7 @@ export function LeaveView({ initialTab = "requests" }) {
     setFormOpen(true);
     setMessage("");
     setError("");
+    ensureBalances();
   }
 
   async function onSubmitLeave(e) {
@@ -983,18 +1099,93 @@ export function LeaveView({ initialTab = "requests" }) {
     }
   }
 
-  if (balanceLoading && !balances.length && requestsLoading) {
-    return <PageLoader label="Loading leave" hint="Fetching balances and requests…" />;
+  const leaveHasSearchOrFilter = Boolean(
+    listQuery.trim() ||
+    leaveTypeFilter !== "all" ||
+    dateFrom ||
+    dateTo ||
+    status !== "all"
+  );
+  const encashHasSearchOrFilter = Boolean(
+    encashQuery.trim() ||
+    encashTypeFilter !== "all" ||
+    encashDateFrom ||
+    encashDateTo ||
+    encashStatus !== "all"
+  );
+  const balanceHasSearchOrFilter = Boolean(
+    balanceQuery.trim() || fyFilterActive
+  );
+
+  function clearLeaveListFilters() {
+    setListQuery("");
+    setDraftDateFrom("");
+    setDraftDateTo("");
+    setDateFrom("");
+    setDateTo("");
+    setDraftLeaveType("all");
+    setLeaveTypeFilter("all");
+    setStatusFilter("all");
+    setPage(1);
   }
+
+  function clearEncashListFilters() {
+    setEncashQuery("");
+    setDraftEncashDateFrom("");
+    setDraftEncashDateTo("");
+    setEncashDateFrom("");
+    setEncashDateTo("");
+    setDraftEncashType("all");
+    setEncashTypeFilter("all");
+    setEncashStatusFilter("all");
+    setEncashPage(1);
+  }
+
+  function clearBalanceListFilters() {
+    setBalanceQuery("");
+    const y = String(currentYear);
+    setDraftFiscalYear(y);
+    setFiscalYear(currentYear);
+  }
+
+  if (
+    (isBalance && balanceLoading && !balances.length) ||
+    (isLogs && requestsLoading && !requests.length) ||
+    (isEncashment && encashLoading && !encashRows.length)
+  ) {
+    return (
+      <PageLoader
+        label={
+          isEncashment
+            ? "Loading encashment"
+            : isBalance
+              ? "Loading leave balance"
+              : "Loading leave"
+        }
+        hint="Fetching your leave data…"
+      />
+    );
+  }
+
+  const pageTitle = isEncashment
+    ? "Leave Encashment"
+    : isBalance
+      ? "Leave Balance"
+      : "Leave Logs";
+  const pageSubtitle = isEncashment
+    ? "Convert unused leave days to salary and track encashment requests."
+    : isBalance
+      ? "See allocated, used, pending, and remaining leave by type."
+      : "Apply for leave and track the status of your leave requests.";
 
   return (
     <PortalPage
       fill
-      title="Leave"
-      subtitle="Track balances, apply for time off, and manage pending requests."
+      title={pageTitle}
+      subtitle={pageSubtitle}
       actions={
         <>
-          <MetaBadge>FY {fiscalYear}</MetaBadge>
+          {isBalance ? <MetaBadge>FY {fiscalYear}</MetaBadge> : null}
           <Button
             type="button"
             variant="outline"
@@ -1004,28 +1195,103 @@ export function LeaveView({ initialTab = "requests" }) {
             <RefreshCw className="h-4 w-4" />
             Refresh
           </Button>
-          <Button
-            type="button"
-            className="h-10 rounded-xl"
-            onClick={() => openApply()}
-          >
-            <Plus className="h-4 w-4" />
-            Apply leave
-          </Button>
+          {isLogs ? (
+            <Button
+              type="button"
+              className="h-10 rounded-xl"
+              onClick={() => openApply()}
+            >
+              <Plus className="h-4 w-4" />
+              Apply leave
+            </Button>
+          ) : null}
+          {isEncashment && encashmentEnabled && !encashDisabled ? (
+            <Button
+              type="button"
+              className="h-10 rounded-xl"
+              onClick={() => {
+                setEncashOpen(true);
+                setEncashForm((prev) => ({
+                  ...prev,
+                  fiscalYear: String(fiscalYear),
+                }));
+                ensureBalances();
+              }}
+            >
+              <Banknote className="h-4 w-4" />
+              Apply encashment
+            </Button>
+          ) : null}
         </>
       }
     >
 
       <CollapsibleSection title="Summary">
         <div className={SUMMARY_GRID_CLASS}>
-          <SoftStat label="Remaining" value={num(totals.remaining)} color="#22c55e" />
-          <SoftStat label="Used" value={num(totals.used)} color="#7b39ec" />
-          <SoftStat
-            label="Pending approval"
-            value={num(totals.pending)}
-            color="#f59e0b"
-          />
-          <SoftStat label="Leave types" value={String(balances.length)} />
+          {isBalance ? (
+            <>
+              <SoftStat
+                label="Allocated"
+                value={num(totals.allocated)}
+                color="#64748b"
+              />
+              <SoftStat
+                label="Remaining"
+                value={num(totals.remaining)}
+                color="#22c55e"
+              />
+              <SoftStat label="Used" value={num(totals.used)} color="#7b39ec" />
+              <SoftStat
+                label="Pending"
+                value={num(totals.pending)}
+                color="#f59e0b"
+              />
+            </>
+          ) : isEncashment ? (
+            <>
+              <SoftStat
+                label="Total Requests"
+                value={encashStats.total}
+              />
+              <SoftStat
+                label="Pending"
+                value={encashStats.pending}
+                color="#7b39ec"
+              />
+              <SoftStat
+                label="Approved"
+                value={encashStats.approved}
+                color="#22c55e"
+              />
+              <SoftStat
+                label="Cancelled"
+                value={encashStats.cancelled}
+                color="#ef4444"
+              />
+            </>
+          ) : (
+            <>
+              <SoftStat
+                label="Total Requests"
+                value={requestStats.total}
+              />
+              <SoftStat
+                label="Pending"
+                value={requestStats.pending}
+                color="#7b39ec"
+              />
+              <SoftStat
+                label="Approved"
+                value={requestStats.approved}
+                color="#22c55e"
+              />
+              <SoftStat
+                label="Cancelled"
+                value={requestStats.cancelled}
+                color="#ef4444"
+              />
+            </>
+          )}
         </div>
       </CollapsibleSection>
 
@@ -1045,17 +1311,24 @@ export function LeaveView({ initialTab = "requests" }) {
           onDismiss={() => setMessage("")}
         />
       ) : null}
+      {isEncashment && encashMessage && encashDisabled ? (
+        <FlashBanner
+          message={encashMessage}
+          tone="danger"
+          autoDismiss={false}
+        />
+      ) : null}
 
-      {/* Leave + encashment lists */}
       <Card
         data-fill-panel=""
         className="!p-0 min-h-0 overflow-hidden"
         bodyClassName="!min-h-0 flex flex-col overflow-hidden"
       >
-        <TablePanel
-          className="min-h-0 flex-1 border-0 shadow-none rounded-none"
-          title="Leave Logs"
-          titleCount={requestTotal}
+        {isLogs ? (
+          <TablePanel
+            className="min-h-0 flex-1 border-0 shadow-none rounded-none"
+            title="Leave Logs"
+            titleCount={requestTotal}
             tabs={statusTabs}
             tab={status}
             onTabChange={setStatusFilter}
@@ -1064,17 +1337,18 @@ export function LeaveView({ initialTab = "requests" }) {
             onSearchChange={setListQuery}
             searchPlaceholder="Search logs…"
             filterTitle="Filters"
-            filterSubtitle="Fiscal year and leave type"
+            filterSubtitle="Date range and leave type"
             filterActive={leaveListFilterCount > 0}
             activeFilterCount={leaveListFilterCount}
             drawerFields={
               <div className="space-y-5">
-                <SearchableFilter
-                  label="Fiscal year"
-                  value={draftFiscalYear}
-                  onChange={setDraftFiscalYear}
-                  options={fiscalYearFilterOptions}
-                  defaultValue={String(currentYear)}
+                <FilterDrawerDateRange
+                  from={draftDateFrom}
+                  to={draftDateTo}
+                  onFromChange={setDraftDateFrom}
+                  onToChange={setDraftDateTo}
+                  title="Leave period"
+                  hint="Filter by leave from / to dates."
                 />
                 <SearchableFilter
                   label="Leave type"
@@ -1086,14 +1360,16 @@ export function LeaveView({ initialTab = "requests" }) {
               </div>
             }
             onApplyFilters={() => {
-              setFiscalYear(Number(draftFiscalYear));
+              setDateFrom(draftDateFrom);
+              setDateTo(draftDateTo);
               setLeaveTypeFilter(draftLeaveType);
               setPage(1);
             }}
             onResetFilters={() => {
-              const y = String(currentYear);
-              setDraftFiscalYear(y);
-              setFiscalYear(currentYear);
+              setDraftDateFrom("");
+              setDraftDateTo("");
+              setDateFrom("");
+              setDateTo("");
               setDraftLeaveType("all");
               setLeaveTypeFilter("all");
               setPage(1);
@@ -1108,22 +1384,35 @@ export function LeaveView({ initialTab = "requests" }) {
             loading={requestsLoading}
             loadingLabel="Loading requests"
             loadingHint="Fetching leave requests…"
-            emptyIcon={Inbox}
-            emptyTitle="No leave requests"
+            emptyIcon={leaveHasSearchOrFilter ? SearchX : Inbox}
+            emptyTitle={
+              leaveHasSearchOrFilter ? "Data not found" : "No leave requests"
+            }
             emptyHint={
-              status === "all" && !listQuery && leaveTypeFilter === "all"
-                ? "When you apply for leave, your requests will show up here."
-                : "No requests match these filters."
+              leaveHasSearchOrFilter
+                ? "No leave logs match your search or filters. Try a different date range, leave type, or clear filters."
+                : "When you apply for leave, your requests will show up here."
             }
             emptyAction={
-              <Button
-                type="button"
-                className="h-10 rounded-xl"
-                onClick={() => openApply()}
-              >
-                <Plus className="h-4 w-4" />
-                Apply leave
-              </Button>
+              leaveHasSearchOrFilter ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-xl"
+                  onClick={clearLeaveListFilters}
+                >
+                  Clear search & filters
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  className="h-10 rounded-xl"
+                  onClick={() => openApply()}
+                >
+                  <Plus className="h-4 w-4" />
+                  Apply leave
+                </Button>
+              )
             }
             page={page}
             pageSize={limit}
@@ -1135,113 +1424,194 @@ export function LeaveView({ initialTab = "requests" }) {
               setPage(1);
             }}
           />
+        ) : null}
 
-        {encashmentEnabled && !encashDisabled ? (
-          <TablePanel
-            className="min-h-0 shrink-0 border-0 border-t border-[var(--border)] shadow-none rounded-none"
-            title="Encashment Logs"
-            titleCount={encashTotal}
-            fill={false}
-            toolbarExtra={
-              <Button
-                type="button"
-                variant="outline"
-                className="h-7 rounded-lg px-2.5 text-[11px]"
-                onClick={() => {
-                  setEncashOpen(true);
-                  setEncashForm((prev) => ({
-                    ...prev,
-                    fiscalYear: String(fiscalYear),
-                  }));
-                }}
-              >
-                <Banknote className="h-3.5 w-3.5" />
-                Apply encashment
-              </Button>
+        {isEncashment ? (
+          encashmentEnabled && !encashDisabled ? (
+            <TablePanel
+              className="min-h-0 flex-1 border-0 shadow-none rounded-none"
+              title="Encashment Logs"
+              titleCount={encashTotal}
+              toolbarExtra={
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-7 rounded-lg px-2.5 text-[11px]"
+                  onClick={() => {
+                    setEncashOpen(true);
+                    setEncashForm((prev) => ({
+                      ...prev,
+                      fiscalYear: String(fiscalYear),
+                    }));
+                    ensureBalances();
+                  }}
+                >
+                  <Banknote className="h-3.5 w-3.5" />
+                  Apply encashment
+                </Button>
+              }
+              tabs={encashStatusTabs}
+              tab={encashStatus}
+              onTabChange={setEncashStatusFilter}
+              recordCount={filteredEncashRows.length}
+              search={encashQuery}
+              onSearchChange={setEncashQuery}
+              searchPlaceholder="Search logs…"
+              filterTitle="Filters"
+              filterSubtitle="Date range and leave type"
+              filterActive={encashListFilterCount > 0}
+              activeFilterCount={encashListFilterCount}
+              drawerFields={
+                <div className="space-y-5">
+                  <FilterDrawerDateRange
+                    from={draftEncashDateFrom}
+                    to={draftEncashDateTo}
+                    onFromChange={setDraftEncashDateFrom}
+                    onToChange={setDraftEncashDateTo}
+                    title="Date range"
+                    hint="Filter encashment requests by submitted / period dates."
+                  />
+                  <SearchableFilter
+                    label="Leave type"
+                    value={draftEncashType}
+                    onChange={setDraftEncashType}
+                    options={leaveTypeOptions}
+                    defaultValue="all"
+                  />
+                </div>
+              }
+              onApplyFilters={() => {
+                setEncashDateFrom(draftEncashDateFrom);
+                setEncashDateTo(draftEncashDateTo);
+                setEncashTypeFilter(draftEncashType);
+                setEncashPage(1);
+              }}
+              onResetFilters={() => {
+                setDraftEncashDateFrom("");
+                setDraftEncashDateTo("");
+                setEncashDateFrom("");
+                setEncashDateTo("");
+                setDraftEncashType("all");
+                setEncashTypeFilter("all");
+                setEncashPage(1);
+              }}
+              onRefresh={refetch}
+              columns={encashColumns}
+              rows={filteredEncashRows}
+              getRowKey={(row) =>
+                row.encashmentId || row.requestId || row.id
+              }
+              minWidth="960px"
+              loading={encashLoading}
+              loadingLabel="Loading encashment"
+              loadingHint="Fetching encashment requests…"
+              emptyIcon={encashHasSearchOrFilter ? SearchX : Banknote}
+              emptyTitle={
+                encashHasSearchOrFilter
+                  ? "Data not found"
+                  : "No encashment requests"
+              }
+              emptyHint={
+                encashHasSearchOrFilter
+                  ? "No encashment logs match your search or filters. Try different dates, leave type, or clear filters."
+                  : "Convert unused leave days to salary when your policy allows it."
+              }
+              emptyAction={
+                encashHasSearchOrFilter ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 rounded-xl"
+                    onClick={clearEncashListFilters}
+                  >
+                    Clear search & filters
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    className="h-10 rounded-xl"
+                    onClick={() => {
+                      setEncashForm((prev) => ({
+                        ...prev,
+                        fiscalYear: String(fiscalYear),
+                      }));
+                      setEncashOpen(true);
+                      ensureBalances();
+                    }}
+                  >
+                    Apply encashment
+                  </Button>
+                )
+              }
+              page={encashPage}
+              pageSize={encashLimit}
+              total={encashTotal}
+              totalPages={encashPages}
+              onPageChange={setEncashPage}
+              onPageSizeChange={(n) => {
+                setEncashLimit(n);
+                setEncashPage(1);
+              }}
+            />
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-16 text-center">
+              <Banknote className="h-8 w-8 text-[var(--muted)]" />
+              <p className="text-[14px] font-semibold text-[var(--text)]">
+                Encashment not available
+              </p>
+              <p className="max-w-sm text-[12px] text-[var(--muted)]">
+                {encashMessage ||
+                  "Leave encashment is not enabled for your company."}
+              </p>
+            </div>
+          )
+        ) : null}
+
+        {isBalance ? (
+          <LeaveBalanceBoard
+            rows={filteredBalances}
+            resolveName={(row) =>
+              leaveTypeName(row.leaveTypeId, leaveTypes, balances) ||
+              row.leaveTypeName
             }
-            tabs={statusTabs}
-            tab={encashStatus}
-            onTabChange={setEncashStatusFilter}
-            recordCount={filteredEncashRows.length}
-            search={encashQuery}
-            onSearchChange={setEncashQuery}
-            searchPlaceholder="Search logs…"
-            filterTitle="Filters"
-            filterSubtitle="Fiscal year and leave type"
-            filterActive={encashListFilterCount > 0}
-            activeFilterCount={encashListFilterCount}
-            drawerFields={
-              <div className="space-y-5">
-                <SearchableFilter
-                  label="Fiscal year"
-                  value={draftFiscalYear}
-                  onChange={setDraftFiscalYear}
-                  options={fiscalYearFilterOptions}
-                  defaultValue={String(currentYear)}
-                />
-                <SearchableFilter
-                  label="Leave type"
-                  value={draftEncashType}
-                  onChange={setDraftEncashType}
-                  options={leaveTypeOptions}
-                  defaultValue="all"
-                />
-              </div>
-            }
+            loading={balanceLoading}
+            search={balanceQuery}
+            onSearchChange={setBalanceQuery}
+            fiscalYear={fiscalYear}
+            draftFiscalYear={draftFiscalYear}
+            onDraftFiscalYearChange={setDraftFiscalYear}
+            fiscalYearOptions={fiscalYearFilterOptions}
+            currentYear={currentYear}
+            filterActive={fyFilterActive}
+            activeFilterCount={fyFilterActive ? 1 : 0}
             onApplyFilters={() => {
               setFiscalYear(Number(draftFiscalYear));
-              setEncashTypeFilter(draftEncashType);
-              setEncashPage(1);
             }}
             onResetFilters={() => {
-              const y = String(currentYear);
-              setDraftFiscalYear(y);
-              setFiscalYear(currentYear);
-              setDraftEncashType("all");
-              setEncashTypeFilter("all");
-              setEncashPage(1);
+              clearBalanceListFilters();
             }}
             onRefresh={refetch}
-            columns={encashColumns}
-            rows={filteredEncashRows}
-            getRowKey={(row) =>
-              row.encashmentId || row.requestId || row.id
+            emptyFiltered={balanceHasSearchOrFilter}
+            emptyTitle={
+              balanceHasSearchOrFilter ? "Data not found" : "No leave balance"
             }
-            minWidth="960px"
-            loading={encashLoading}
-            loadingLabel="Loading encashment"
-            loadingHint="Fetching encashment requests…"
-            emptyIcon={Banknote}
-            emptyTitle="No encashment requests"
             emptyHint={
-              encashRows.length === 0
-                ? "Convert unused leave days to salary when your policy allows it."
-                : "No requests match these filters."
+              balanceHasSearchOrFilter
+                ? "No leave balance matches your search or fiscal year filter. Try clearing them."
+                : "Leave balances for this fiscal year will show here."
             }
             emptyAction={
-              <Button
-                type="button"
-                className="h-10 rounded-xl"
-                onClick={() => {
-                  setEncashForm((prev) => ({
-                    ...prev,
-                    fiscalYear: String(fiscalYear),
-                  }));
-                  setEncashOpen(true);
-                }}
-              >
-                Apply encashment
-              </Button>
+              balanceHasSearchOrFilter ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-xl"
+                  onClick={clearBalanceListFilters}
+                >
+                  Clear search & filters
+                </Button>
+              ) : null
             }
-            page={encashPage}
-            pageSize={encashLimit}
-            total={encashTotal}
-            totalPages={encashPages}
-            onPageChange={setEncashPage}
-            onPageSizeChange={(n) => {
-              setEncashLimit(n);
-              setEncashPage(1);
-            }}
           />
         ) : null}
       </Card>
@@ -1389,11 +1759,10 @@ export function LeaveView({ initialTab = "requests" }) {
                           opt.key === "isSecondHalf" ? !prev.isSecondHalf : false,
                       }));
                     }}
-                    className={`rounded-xl border px-3 py-2.5 text-[13px] font-semibold transition ${
-                      active
-                        ? "border-[var(--violet)] bg-[var(--lavender-soft)] text-[var(--violet)]"
-                        : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--panel-soft)]"
-                    }`}
+                    className={`rounded-xl border px-3 py-2.5 text-[13px] font-semibold transition ${active
+                      ? "border-[var(--violet)] bg-[var(--lavender-soft)] text-[var(--violet)]"
+                      : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--panel-soft)]"
+                      }`}
                   >
                     {opt.label}
                   </button>
@@ -1576,11 +1945,11 @@ export function LeaveView({ initialTab = "requests" }) {
         subtitle={
           encashDetail
             ? `ID · ${String(
-                encashDetail.encashmentId ||
-                  encashDetail.requestId ||
-                  encashDetail.id ||
-                  ""
-              ).slice(0, 8)}…`
+              encashDetail.encashmentId ||
+              encashDetail.requestId ||
+              encashDetail.id ||
+              ""
+            ).slice(0, 8)}…`
             : ""
         }
       >
@@ -1671,8 +2040,8 @@ export function LeaveView({ initialTab = "requests" }) {
                 onClick={() =>
                   onCancelEncash(
                     encashDetail.encashmentId ||
-                      encashDetail.requestId ||
-                      encashDetail.id
+                    encashDetail.requestId ||
+                    encashDetail.id
                   )
                 }
               >

@@ -723,12 +723,6 @@ export function AttendanceView() {
               label="Working Hours"
               value={formatHoursMinutes(summary?.totalWorkingHours)}
             />
-            {breakEnabled ? (
-              <SoftStat
-                label="Break Minutes"
-                value={summary?.totalBreakMinutes ?? 0}
-              />
-            ) : null}
           </div>
         )}
       </CollapsibleSection>

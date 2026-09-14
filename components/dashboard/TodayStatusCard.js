@@ -94,21 +94,21 @@ export function TodayStatusCard({ today, timeFormat = "12h", emptyMessage }) {
           ) : null}
 
           <div className="grid flex-1 grid-cols-2 gap-2">
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5">
+            <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-2.5 py-2.5 sm:px-3">
               <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                <LogIn className="h-3 w-3 text-[var(--success)]" />
+                <LogIn className="h-3 w-3 shrink-0 text-[var(--success)]" />
                 In
               </div>
-              <p className="mt-1 text-[13px] font-bold tabular-nums text-[var(--text)]">
+              <p className="mt-1 truncate text-[12px] font-bold tabular-nums text-[var(--text)] sm:text-[13px]">
                 {inTime ? formatTime(inTime, timeFormat) : "—"}
               </p>
             </div>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5">
+            <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-2.5 py-2.5 sm:px-3">
               <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                <LogOut className="h-3 w-3 text-[var(--violet)]" />
+                <LogOut className="h-3 w-3 shrink-0 text-[var(--violet)]" />
                 Out
               </div>
-              <p className="mt-1 text-[13px] font-bold tabular-nums text-[var(--text)]">
+              <p className="mt-1 truncate text-[12px] font-bold tabular-nums text-[var(--text)] sm:text-[13px]">
                 {outTime ? formatTime(outTime, timeFormat) : "—"}
               </p>
             </div>

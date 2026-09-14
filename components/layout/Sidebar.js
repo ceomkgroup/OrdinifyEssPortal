@@ -24,6 +24,7 @@ import { OrdinifyLogo } from "@/components/ui/OrdinifyLogo";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { ASSET_NAV } from "@/lib/asset-nav";
 import { DOCUMENT_TYPES } from "@/lib/document-types";
+import { LEAVE_NAV } from "@/lib/leave-nav";
 import { PROFILE_NAV } from "@/lib/profile-nav";
 import { REQUEST_TYPES } from "@/lib/request-types";
 import { SETTINGS_NAV } from "@/lib/settings-nav";
@@ -38,7 +39,12 @@ const NAV = [
   },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck2 },
   { href: "/roster", label: "Shift Roster", icon: CalendarClock },
-  { href: "/leave", label: "Leave", icon: Palmtree },
+  {
+    href: "/leave",
+    label: "Leave",
+    icon: Palmtree,
+    childrenKey: "leave",
+  },
   {
     href: "/requests",
     label: "Requests",
@@ -152,13 +158,25 @@ export function Sidebar({ open, onClose, collapsed }) {
     canShowRequestTile,
     canShowDocumentTile,
     canShowAssetTile,
+    canShowLeaveTile,
     loading,
   } = useModules();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const leaveChildren = useMemo(
+    () =>
+      LEAVE_NAV.filter((item) => canShowLeaveTile(item.key)).map((item) => ({
+        href: item.href,
+        label: item.title,
+        icon: item.icon,
+      })),
+    [canShowLeaveTile]
+  );
 
   const requestChildren = useMemo(
     () =>
@@ -216,6 +234,7 @@ export function Sidebar({ open, onClose, collapsed }) {
 
   useEffect(() => {
     if (pathname?.startsWith("/profile")) setProfileOpen(true);
+    if (pathname?.startsWith("/leave")) setLeaveOpen(true);
     if (pathname?.startsWith("/requests")) setRequestsOpen(true);
     if (pathname?.startsWith("/documents")) setDocumentsOpen(true);
     if (pathname?.startsWith("/assets")) setAssetsOpen(true);
@@ -225,6 +244,9 @@ export function Sidebar({ open, onClose, collapsed }) {
   const items = NAV.filter((item) => {
     if (loading && !canAccessRoute(item.href)) {
       return item.href === "/dashboard" || item.href === "/profile";
+    }
+    if (item.childrenKey === "leave") {
+      return leaveChildren.length > 0 || canAccessRoute("/leave");
     }
     if (item.childrenKey === "requests") {
       return requestChildren.length > 0 || canAccessRoute("/requests");
@@ -286,6 +308,35 @@ export function Sidebar({ open, onClose, collapsed }) {
                   maxHeightClass="max-h-[240px]"
                 >
                   {profileChildren.map((child) => (
+                    <ChildLink
+                      key={child.href}
+                      href={child.href}
+                      label={child.label}
+                      icon={child.icon}
+                      pathname={pathname}
+                      onClose={onClose}
+                      collapsed={collapsed}
+                    />
+                  ))}
+                </NavSection>
+              );
+            }
+
+            if (childrenKey === "leave") {
+              return (
+                <NavSection
+                  key={href}
+                  href={href}
+                  label={label}
+                  Icon={Icon}
+                  open={leaveOpen}
+                  setOpen={setLeaveOpen}
+                  sectionActive={pathname?.startsWith("/leave")}
+                  collapsed={collapsed}
+                  onClose={onClose}
+                  maxHeightClass="max-h-[280px]"
+                >
+                  {leaveChildren.map((child) => (
                     <ChildLink
                       key={child.href}
                       href={child.href}

@@ -58,7 +58,7 @@ export function TeamMembersCard({ teamMembers = [] }) {
             return (
               <li
                 key={memberKey(member, index)}
-                className="grid grid-cols-[auto_minmax(0,1fr)_minmax(7.5rem,0.9fr)] items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5 transition hover:border-[var(--lavender)] hover:bg-[var(--surface)]"
+                className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5 transition hover:border-[var(--lavender)] hover:bg-[var(--surface)] sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,7.5rem)]"
               >
                 <Avatar
                   name={name}
@@ -80,9 +80,20 @@ export function TeamMembersCard({ teamMembers = [] }) {
                       {code}
                     </span>
                   </p>
+                  <div className="mt-1 min-w-0 sm:hidden">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+                      Designation
+                    </p>
+                    <p
+                      className="mt-0.5 truncate text-[12px] font-semibold text-[var(--violet)]"
+                      title={designation}
+                    >
+                      {designation}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="min-w-0 text-right">
+                <div className="hidden min-w-0 text-right sm:block">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
                     Designation
                   </p>
