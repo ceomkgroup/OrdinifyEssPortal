@@ -1,16 +1,19 @@
 "use client";
 
-import { PayslipsView } from "@/components/payslip/PayslipsView";
+import { useParams } from "next/navigation";
+import { PayslipDetailView } from "@/components/payslip/PayslipDetailView";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { ComingSoon } from "@/components/ui/ComingSoon";
 import { PageLoader } from "@/components/ui/Spinner";
 
-export default function PayslipPage() {
+export default function PayslipDetailPage() {
+  const params = useParams();
+  const payslipId = String(params?.payslipId || "");
   const { canAccessRoute, loading } = useModules();
 
   if (loading) {
     return (
-      <PageLoader label="Loading payslips" hint="Checking payroll module access…" />
+      <PageLoader label="Loading payslip" hint="Checking payroll module access…" />
     );
   }
 
@@ -23,5 +26,5 @@ export default function PayslipPage() {
     );
   }
 
-  return <PayslipsView />;
+  return <PayslipDetailView payslipId={payslipId} />;
 }

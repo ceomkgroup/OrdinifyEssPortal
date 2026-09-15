@@ -35,7 +35,11 @@ export async function loginEmployee({ email, password }) {
     throw new Error(data?.message || "Login failed");
   }
 
-  return normalizeAuthPayload(data);
+  const session = normalizeAuthPayload(data);
+  if (!session.accessToken) {
+    throw new Error("Login failed. Please try again.");
+  }
+  return session;
 }
 
 export async function refreshEmployeeToken(refreshToken) {

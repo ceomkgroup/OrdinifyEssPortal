@@ -72,7 +72,7 @@ function PortalShellInner({ children, employee, companySettings }) {
             }}
           />
         </div>
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto p-3 sm:p-4 md:p-5 lg:p-6 [&>[data-portal-fill]]:min-h-0 [&>[data-portal-fill]]:flex-1 [&>[data-portal-fill]]:overflow-hidden">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto p-2.5 sm:p-3 md:p-3.5 lg:p-4 [&>[data-portal-fill]]:min-h-0 [&>[data-portal-fill]]:flex-1 [&>[data-portal-fill]]:overflow-hidden">
           {children}
         </main>
       </div>

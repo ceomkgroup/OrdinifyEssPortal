@@ -16,6 +16,7 @@ import {
   canShowDocumentTile,
   canShowAssetTile,
   canShowLeaveTile,
+  canShowPayslipTile,
   canShowWidget,
   hasAnyScreen,
   hasFlag,
@@ -118,6 +119,7 @@ export function ModulesProvider({ children }) {
       canShowDocumentTile: (key) => canShowDocumentTile(modules, key),
       canShowAssetTile: (key) => canShowAssetTile(modules, key),
       canShowLeaveTile: (key) => canShowLeaveTile(modules, key),
+      canShowPayslipTile: (key) => canShowPayslipTile(modules, key),
     }),
     [modules, raw, loading, error, refetch]
   );

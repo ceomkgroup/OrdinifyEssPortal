@@ -733,7 +733,7 @@ export function AnnouncementsView({
       </CollapsibleSection>
 
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--card-shadow)]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-1.5 sm:px-3.5">
           <h2 className="heading-section">
             Announcement Logs
           </h2>

@@ -12,22 +12,19 @@ import { Bell, X } from "lucide-react";
 import { registerFcmToken } from "@/api/fcm";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { bindForegroundMessages, getWebFcmToken } from "@/lib/firebase-client";
+import {
+  clearFcmBannerDismiss,
+  clearStoredFcmToken,
+  dismissFcmBanner,
+  getStoredFcmToken,
+  isFcmBannerDismissed,
+  setStoredFcmToken,
+} from "@/lib/fcm-session";
 import { Button } from "@/components/ui/Button";
-
-const FCM_TOKEN_KEY = "employee_fcm_token";
-const FCM_BANNER_DISMISS_KEY = "employee_fcm_banner_dismissed";
 
 const FcmContext = createContext(null);
 
-function getStoredFcmToken() {
-  if (typeof window === "undefined") return "";
-  return window.sessionStorage.getItem(FCM_TOKEN_KEY) || "";
-}
-
-export function clearStoredFcmToken() {
-  if (typeof window === "undefined") return;
-  window.sessionStorage.removeItem(FCM_TOKEN_KEY);
-}
+export { clearStoredFcmToken };
 
 function readPermission() {
   if (typeof window === "undefined" || !("Notification" in window)) {
@@ -65,8 +62,8 @@ export async function enableWebPushNotifications() {
   }
 
   await registerFcmToken({ token, platform: "web" });
-  window.sessionStorage.setItem(FCM_TOKEN_KEY, token);
-  window.sessionStorage.removeItem(FCM_BANNER_DISMISS_KEY);
+  setStoredFcmToken(token);
+  clearFcmBannerDismiss();
   return token;
 }
 
@@ -85,13 +82,12 @@ async function syncTokenIfAlreadyGranted() {
       if (prev === token) return token;
 
       // Mark early so a Strict Mode remount won't POST again mid-flight.
-      window.sessionStorage.setItem(FCM_TOKEN_KEY, token);
+      setStoredFcmToken(token);
       await registerFcmToken({ token, platform: "web" });
       return token;
     } catch (err) {
       // Allow retry on next mount if register failed.
-      const stored = getStoredFcmToken();
-      if (stored) window.sessionStorage.removeItem(FCM_TOKEN_KEY);
+      if (getStoredFcmToken()) clearStoredFcmToken();
       throw err;
     } finally {
       syncInflight = null;
@@ -124,10 +120,7 @@ export function FcmProvider({ children }) {
 
   useEffect(() => {
     setPermission(readPermission());
-    setBannerDismissed(
-      typeof window !== "undefined" &&
-        window.sessionStorage.getItem(FCM_BANNER_DISMISS_KEY) === "1"
-    );
+    setBannerDismissed(isFcmBannerDismissed());
   }, []);
 
   // After login: only register if permission already granted (no auto prompt).
@@ -183,9 +176,7 @@ export function FcmProvider({ children }) {
 
   const dismissBanner = useCallback(() => {
     setBannerDismissed(true);
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(FCM_BANNER_DISMISS_KEY, "1");
-    }
+    dismissFcmBanner();
   }, []);
 
   const showBanner =

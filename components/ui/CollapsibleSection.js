@@ -15,7 +15,7 @@ export function CollapsibleSection({
   onCollapsedChange,
   children,
   className = "",
-  bodyClassName = "border-t border-[var(--border)] px-5 py-3",
+  bodyClassName = "border-t border-[var(--border)] px-3 py-2 sm:px-3.5",
 }) {
   const [collapsedInternal, setCollapsedInternal] = useState(defaultCollapsed);
   const collapsed =
@@ -30,19 +30,19 @@ export function CollapsibleSection({
 
   return (
     <section
-      className={`shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--card-shadow)] ${className}`}
+      className={`shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--card-shadow)] ${className}`}
     >
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-2.5 text-left"
+        className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left sm:px-3.5"
         aria-expanded={!collapsed}
       >
-        <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h2 className="heading-section">{title}</h2>
           {extra}
         </div>
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--panel-soft)]">
+        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--muted)] hover:bg-[var(--panel-soft)]">
           <ChevronDown
             className={`h-4 w-4 transition ${collapsed ? "-rotate-90" : ""}`}
           />

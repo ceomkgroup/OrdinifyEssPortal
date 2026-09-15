@@ -25,6 +25,7 @@ import { useModules } from "@/components/modules/ModulesProvider";
 import { ASSET_NAV } from "@/lib/asset-nav";
 import { DOCUMENT_TYPES } from "@/lib/document-types";
 import { LEAVE_NAV } from "@/lib/leave-nav";
+import { PAYSLIP_NAV } from "@/lib/payslip-nav";
 import { PROFILE_NAV } from "@/lib/profile-nav";
 import { REQUEST_TYPES } from "@/lib/request-types";
 import { SETTINGS_NAV } from "@/lib/settings-nav";
@@ -63,7 +64,12 @@ const NAV = [
     icon: Laptop,
     childrenKey: "assets",
   },
-  { href: "/payslip", label: "Payslip", icon: Receipt },
+  {
+    href: "/payslip",
+    label: "Payslip",
+    icon: Receipt,
+    childrenKey: "payslip",
+  },
   { href: "/team", label: "Team", icon: Users },
   { href: "/holidays", label: "Holidays", icon: CalendarDays },
   { href: "/announcements", label: "Announcements", icon: Megaphone },
@@ -128,9 +134,14 @@ function NavSection({
 
 function ChildLink({ href, label, icon: ChildIcon, pathname, onClose, collapsed }) {
   const exactOnly = href === "/profile" || href === "/requests";
-  const active = exactOnly
-    ? pathname === href
-    : pathname === href || pathname?.startsWith(`${href}/`);
+  const payslipList = href === "/payslip";
+  const active = payslipList
+    ? pathname === "/payslip" ||
+      (Boolean(pathname?.startsWith("/payslip/")) &&
+        !pathname.startsWith("/payslip/tax-certificate"))
+    : exactOnly
+      ? pathname === href
+      : pathname === href || pathname?.startsWith(`${href}/`);
 
   return (
     <Link
@@ -159,6 +170,7 @@ export function Sidebar({ open, onClose, collapsed }) {
     canShowDocumentTile,
     canShowAssetTile,
     canShowLeaveTile,
+    canShowPayslipTile,
     loading,
   } = useModules();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -166,6 +178,7 @@ export function Sidebar({ open, onClose, collapsed }) {
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
+  const [payslipOpen, setPayslipOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const leaveChildren = useMemo(
@@ -212,6 +225,16 @@ export function Sidebar({ open, onClose, collapsed }) {
     [canShowAssetTile]
   );
 
+  const payslipChildren = useMemo(
+    () =>
+      PAYSLIP_NAV.filter((item) => canShowPayslipTile(item.key)).map((item) => ({
+        href: item.href,
+        label: item.title,
+        icon: item.icon,
+      })),
+    [canShowPayslipTile]
+  );
+
   const profileChildren = useMemo(
     () =>
       PROFILE_NAV.map((item) => ({
@@ -233,12 +256,15 @@ export function Sidebar({ open, onClose, collapsed }) {
   );
 
   useEffect(() => {
-    if (pathname?.startsWith("/profile")) setProfileOpen(true);
-    if (pathname?.startsWith("/leave")) setLeaveOpen(true);
-    if (pathname?.startsWith("/requests")) setRequestsOpen(true);
-    if (pathname?.startsWith("/documents")) setDocumentsOpen(true);
-    if (pathname?.startsWith("/assets")) setAssetsOpen(true);
-    if (pathname?.startsWith("/settings")) setSettingsOpen(true);
+    queueMicrotask(() => {
+      if (pathname?.startsWith("/profile")) setProfileOpen(true);
+      if (pathname?.startsWith("/leave")) setLeaveOpen(true);
+      if (pathname?.startsWith("/requests")) setRequestsOpen(true);
+      if (pathname?.startsWith("/documents")) setDocumentsOpen(true);
+      if (pathname?.startsWith("/assets")) setAssetsOpen(true);
+      if (pathname?.startsWith("/payslip")) setPayslipOpen(true);
+      if (pathname?.startsWith("/settings")) setSettingsOpen(true);
+    });
   }, [pathname]);
 
   const items = NAV.filter((item) => {
@@ -256,6 +282,9 @@ export function Sidebar({ open, onClose, collapsed }) {
     }
     if (item.childrenKey === "assets") {
       return assetChildren.length > 0 || canAccessRoute("/assets");
+    }
+    if (item.childrenKey === "payslip") {
+      return payslipChildren.length > 0 || canAccessRoute("/payslip");
     }
     if (item.childrenKey === "profile") {
       return true;
@@ -430,6 +459,35 @@ export function Sidebar({ open, onClose, collapsed }) {
                   maxHeightClass="max-h-[240px]"
                 >
                   {assetChildren.map((child) => (
+                    <ChildLink
+                      key={child.href}
+                      href={child.href}
+                      label={child.label}
+                      icon={child.icon}
+                      pathname={pathname}
+                      onClose={onClose}
+                      collapsed={collapsed}
+                    />
+                  ))}
+                </NavSection>
+              );
+            }
+
+            if (childrenKey === "payslip") {
+              return (
+                <NavSection
+                  key={href}
+                  href={href}
+                  label={label}
+                  Icon={Icon}
+                  open={payslipOpen}
+                  setOpen={setPayslipOpen}
+                  sectionActive={pathname?.startsWith("/payslip")}
+                  collapsed={collapsed}
+                  onClose={onClose}
+                  maxHeightClass="max-h-[200px]"
+                >
+                  {payslipChildren.map((child) => (
                     <ChildLink
                       key={child.href}
                       href={child.href}

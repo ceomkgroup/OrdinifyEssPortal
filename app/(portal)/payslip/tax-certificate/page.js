@@ -1,27 +1,30 @@
 "use client";
 
-import { PayslipsView } from "@/components/payslip/PayslipsView";
+import { TaxCertificateView } from "@/components/payslip/TaxCertificateView";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { ComingSoon } from "@/components/ui/ComingSoon";
 import { PageLoader } from "@/components/ui/Spinner";
 
-export default function PayslipPage() {
+export default function TaxCertificatePage() {
   const { canAccessRoute, loading } = useModules();
 
   if (loading) {
     return (
-      <PageLoader label="Loading payslips" hint="Checking payroll module access…" />
+      <PageLoader
+        label="Loading tax certificate"
+        hint="Checking payroll module access…"
+      />
     );
   }
 
-  if (!canAccessRoute("/payslip")) {
+  if (!canAccessRoute("/payslip/tax-certificate")) {
     return (
       <ComingSoon
-        title="Payslip"
+        title="Tax Certificate"
         description="Payroll is not enabled for your company yet."
       />
     );
   }
 
-  return <PayslipsView />;
+  return <TaxCertificateView />;
 }

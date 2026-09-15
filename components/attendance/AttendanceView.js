@@ -711,11 +711,6 @@ export function AttendanceView() {
               />
             ) : null}
             <SoftStat
-              label="Late Days"
-              value={summary?.lateCount ?? 0}
-              color={getAttendanceTypeColor("LP", attendanceTypes, "#f59e0b")}
-            />
-            <SoftStat
               label="Late Minutes"
               value={summary?.totalLateMinutes ?? 0}
             />

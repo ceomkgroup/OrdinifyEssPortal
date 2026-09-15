@@ -114,7 +114,7 @@ export function TablePanel({
       } ${className}`}
     >
       {(title || titleCount != null || headerExtra || collapsible) && (
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2 sm:gap-3 sm:px-5 sm:py-2.5">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 border-b border-[var(--border)] px-3 py-1.5 sm:gap-2 sm:px-3.5">
           <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-2.5">
             {title ? (
               <div className="min-w-0">
@@ -182,7 +182,7 @@ export function TablePanel({
             <FlashBanner
               message={error}
               tone="danger"
-              className="mx-5 mt-3 shrink-0"
+              className="mx-3 mt-2 shrink-0"
               duration={5000}
               autoDismiss={false}
             />

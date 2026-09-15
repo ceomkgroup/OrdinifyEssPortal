@@ -28,6 +28,11 @@ import {
   pickEmployee,
   setAuthSession,
 } from "@/lib/auth-storage";
+import {
+  buildLoginHref,
+  getPostLoginPath,
+} from "@/lib/auth-redirect";
+import { clearFcmSession, getStoredFcmToken } from "@/lib/fcm-session";
 import { clearPortalCaches } from "@/api/portal";
 import { FullScreenLoader } from "@/components/ui/Spinner";
 
@@ -45,6 +50,20 @@ function mergeEmployee(prev, next) {
     merged[key] = value;
   }
   return merged;
+}
+
+async function detachFcmToken() {
+  const fcmToken = getStoredFcmToken();
+  if (!fcmToken) {
+    clearFcmSession();
+    return;
+  }
+  try {
+    await unregisterFcmToken(fcmToken);
+  } catch {
+    // continue even if unregister fails
+  }
+  clearFcmSession();
 }
 
 export function useAuth() {
@@ -84,9 +103,13 @@ export function AuthProvider({ children }) {
       if (cached && alive) setEmployee(cached);
 
       // Always validate with backend — never trust a stale browser token alone.
+      // Expired access tokens refresh via the axios interceptor (including /auth/me).
       try {
         const me = await getAuthMe();
         if (!alive) return;
+        if (!getAccessToken()) {
+          throw new Error("Session is missing an access token");
+        }
         const profile = pickEmployee(me) || pickEmployee(me?.data) || me;
         const merged = mergeEmployee(cached, profile);
         setEmployee(merged);
@@ -94,6 +117,7 @@ export function AuthProvider({ children }) {
         setHasToken(true);
       } catch {
         if (!alive) return;
+        await detachFcmToken();
         clearAuthSession();
         clearPortalCaches();
         setHasToken(false);
@@ -107,8 +131,9 @@ export function AuthProvider({ children }) {
       setHasToken(false);
       setEmployee(null);
       clearPortalCaches();
-      if (!PUBLIC_PATHS.some((path) => window.location.pathname.startsWith(path))) {
-        router.replace("/login");
+      const path = window.location.pathname;
+      if (!PUBLIC_PATHS.some((prefix) => path.startsWith(prefix))) {
+        router.replace(buildLoginHref());
       }
     };
     window.addEventListener("ordinify:auth-cleared", onAuthCleared);
@@ -123,12 +148,12 @@ export function AuthProvider({ children }) {
     if (bootstrapping) return;
 
     if (!hasToken && !isPublic) {
-      router.replace("/login");
+      router.replace(buildLoginHref());
       return;
     }
 
     if (hasToken && (pathname === "/login" || pathname === "/")) {
-      router.replace("/dashboard");
+      router.replace(getPostLoginPath());
     }
   }, [bootstrapping, hasToken, isPublic, pathname, router]);
 
@@ -137,7 +162,13 @@ export function AuthProvider({ children }) {
       setAuthLoading(true);
       try {
         const session = await loginEmployee({ email, password });
+        if (!session?.accessToken) {
+          throw new Error("Login failed. Please try again.");
+        }
         setAuthSession(session);
+        if (!getAccessToken()) {
+          throw new Error("Login failed. Please try again.");
+        }
         setHasToken(true);
 
         // Prefer employee from login response — call /me only if login didn't return it.
@@ -157,7 +188,7 @@ export function AuthProvider({ children }) {
         }
 
         clearPortalCaches();
-        router.replace("/dashboard");
+        router.replace(getPostLoginPath());
         return session;
       } finally {
         setAuthLoading(false);
@@ -169,20 +200,10 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     setAuthLoading(true);
     try {
-      if (typeof window !== "undefined") {
-        const fcmToken =
-          window.sessionStorage.getItem("employee_fcm_token") || "";
-        if (fcmToken) {
-          try {
-            await unregisterFcmToken(fcmToken);
-          } catch {
-            // continue logout even if FCM unregister fails
-          }
-          window.sessionStorage.removeItem("employee_fcm_token");
-        }
-      }
+      await detachFcmToken();
       await logoutEmployee();
     } finally {
+      clearFcmSession();
       clearAuthSession();
       clearPortalCaches();
       setHasToken(false);

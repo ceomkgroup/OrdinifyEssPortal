@@ -93,7 +93,7 @@ export function ListToolbar({
   return (
     <>
       <div
-        className={`flex min-w-0 items-center gap-2 border-b border-[var(--border)] px-4 py-1.5 ${className}`}
+        className={`flex min-w-0 items-center gap-2 border-b border-[var(--border)] px-3 py-1 sm:px-3.5 ${className}`}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {showTabs

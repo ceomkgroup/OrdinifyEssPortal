@@ -133,18 +133,6 @@ export function RequestsHubView() {
   const activeFilterCount =
     (typeFilter !== "all" ? 1 : 0) + dateFilterCount;
 
-  const pendingCounts = useMemo(() => {
-    const counts = {};
-    for (const row of rows) {
-      const s = String(row.statusBucket || row.status || "").toLowerCase();
-      if (s !== "pending" && s !== "submitted" && s !== "in_progress") continue;
-      const key = row.typeKey;
-      if (!key) continue;
-      counts[key] = (counts[key] || 0) + 1;
-    }
-    return counts;
-  }, [rows]);
-
   const visibleTiles = useMemo(
     () => REQUEST_TYPES.filter((t) => canShowRequestTile(t.key)),
     [canShowRequestTile]
@@ -292,7 +280,7 @@ export function RequestsHubView() {
     <PortalPage
       fill
       title="All requests"
-      subtitle="Track every request in one list. Open a type to apply with its own rules and forms."
+      subtitle="Track every request in one list. Use New request to apply."
       actions={
         <>
           <Button
@@ -328,64 +316,6 @@ export function RequestsHubView() {
           <SoftStat label="Live modules" value={String(liveTiles.length)} color="#7b39ec" />
         </div>
       </CollapsibleSection>
-
-      {/* Apply by type — compact chips, no scroll */}
-      <section>
-        <div className="mb-2.5 flex flex-wrap items-end justify-between gap-2">
-          <div className="min-w-0">
-            <h2 className="heading-section">Apply by type</h2>
-            <p className="heading-sub mt-0.5">
-              Pick a module to apply or manage requests
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {visibleTiles.map((tile) => {
-            const Icon = tile.icon || Inbox;
-            const pending = Number(pendingCounts[tile.key]) || 0;
-            const label = tile.title.replace(/ Request$/i, "");
-            const hasPending = tile.live && pending > 0;
-            return (
-              <Link
-                key={tile.key}
-                href={tile.href}
-                title={
-                  !tile.live
-                    ? `${label} — coming soon`
-                    : hasPending
-                      ? `${label} — ${pending} pending`
-                      : label
-                }
-                className={`group inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-2 text-[12.5px] font-semibold transition ${
-                  hasPending
-                    ? "border-[var(--warning)]/25 bg-[var(--warning-soft)] text-[var(--text)] hover:border-[var(--warning)]/40"
-                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:border-[var(--violet)]/35 hover:bg-[var(--lavender-soft)]"
-                }`}
-              >
-                <span
-                  className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-                    hasPending
-                      ? "bg-[var(--surface)] text-[var(--warning)]"
-                      : "bg-[var(--lavender-soft)] text-[var(--violet)]"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                </span>
-                <span className="truncate">{label}</span>
-                {hasPending ? (
-                  <span className="inline-flex min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-[var(--surface)] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[var(--warning)] ring-1 ring-[var(--warning)]/20">
-                    {pending}
-                  </span>
-                ) : !tile.live ? (
-                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                    Soon
-                  </span>
-                ) : null}
-              </Link>
-            );
-          })}
-        </div>
-      </section>
 
       {/* Unified list */}
       <TablePanel
@@ -446,7 +376,7 @@ export function RequestsHubView() {
         error={error}
         emptyIcon={Inbox}
         emptyTitle="No requests match"
-        emptyHint="Try another filter, or start a new request from a module above."
+        emptyHint="Try another filter, or start a new request from the button above."
         page={currentPage}
         pageSize={limit}
         total={filtered.length}

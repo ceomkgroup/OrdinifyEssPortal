@@ -170,6 +170,12 @@ export function getNotificationHref(row) {
       return data.announcementId
         ? `/announcements?id=${data.announcementId}`
         : "/announcements";
+    case "payslip":
+    case "payroll":
+      return data.payslipId ? `/payslip/${data.payslipId}` : "/payslip";
+    case "tax_certificate":
+    case "tax-certificate":
+      return "/payslip/tax-certificate";
     default:
       return null;
   }

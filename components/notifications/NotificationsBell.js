@@ -39,9 +39,9 @@ function NotificationRow({
     : "—";
   const isUnread = !row.isRead;
 
-  const content = (
+  const body = (
     <div
-      className={`group relative flex gap-3 border-l-[3px] px-3.5 py-3 transition ${
+      className={`flex gap-3 border-l-[3px] px-3.5 py-3 pr-12 transition ${
         isUnread
           ? `${toneClass.unreadBorder} bg-[var(--lavender-soft)]/45 hover:bg-[var(--lavender-soft)]/70`
           : "border-l-transparent opacity-80 hover:bg-[var(--panel-soft)] hover:opacity-100"
@@ -54,52 +54,29 @@ function NotificationRow({
       </span>
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <p
-                className={`truncate text-[13px] leading-snug ${
-                  isUnread
-                    ? "font-semibold text-[var(--text)]"
-                    : "font-medium text-[var(--muted)]"
-                }`}
-              >
-                {row.title}
-              </p>
-              {isUnread ? (
-                <span className="inline-flex shrink-0 items-center rounded-full bg-[var(--violet)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                  New
-                </span>
-              ) : (
-                <span className="inline-flex shrink-0 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                  Read
-                </span>
-              )}
-            </div>
-            <p className="mt-0.5 text-[10px] font-medium text-[var(--muted)]">
-              {label}
-            </p>
-          </div>
-
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p
+            className={`truncate text-[13px] leading-snug ${
+              isUnread
+                ? "font-semibold text-[var(--text)]"
+                : "font-medium text-[var(--muted)]"
+            }`}
+          >
+            {row.title}
+          </p>
           {isUnread ? (
-            <button
-              type="button"
-              title="Mark as read"
-              aria-label="Mark as read"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onMarkRead(row);
-              }}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] opacity-0 transition hover:border-[var(--violet)] hover:bg-[var(--violet-soft)] hover:text-[var(--violet)] group-hover:opacity-100"
-            >
-              <Check className="h-3.5 w-3.5" />
-            </button>
+            <span className="inline-flex shrink-0 items-center rounded-full bg-[var(--violet)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+              New
+            </span>
           ) : (
-            <span className="mt-1 inline-flex h-2 w-2 shrink-0 rounded-full bg-[var(--border)]" />
+            <span className="inline-flex shrink-0 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Read
+            </span>
           )}
         </div>
-
+        <p className="mt-0.5 text-[10px] font-medium text-[var(--muted)]">
+          {label}
+        </p>
         <p
           className={`mt-1 line-clamp-2 text-[12px] leading-relaxed ${
             isUnread ? "text-[var(--text)]/85" : "text-[var(--muted)]"
@@ -107,11 +84,7 @@ function NotificationRow({
         >
           {row.body}
         </p>
-
-        <p
-          className="mt-1.5 text-[11px] text-[var(--muted)]"
-          title={fullTime}
-        >
+        <p className="mt-1.5 text-[11px] text-[var(--muted)]" title={fullTime}>
           {relative || fullTime}
           {relative ? ` · ${fullTime}` : ""}
         </p>
@@ -119,25 +92,47 @@ function NotificationRow({
     </div>
   );
 
-  if (href) {
-    return (
-      <Link
-        href={href}
-        className="block"
-        onClick={() => {
-          onMarkRead(row);
-          onNavigate?.();
-        }}
-      >
-        {content}
-      </Link>
-    );
-  }
-
   return (
-    <button type="button" className="block w-full text-left" onClick={() => onMarkRead(row)}>
-      {content}
-    </button>
+    <div className="group relative">
+      {href ? (
+        <Link
+          href={href}
+          className="block"
+          onClick={() => {
+            onMarkRead(row);
+            onNavigate?.();
+          }}
+        >
+          {body}
+        </Link>
+      ) : (
+        <button
+          type="button"
+          className="block w-full text-left"
+          onClick={() => onMarkRead(row)}
+        >
+          {body}
+        </button>
+      )}
+
+      {isUnread ? (
+        <button
+          type="button"
+          title="Mark as read"
+          aria-label="Mark as read"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onMarkRead(row);
+          }}
+          className="absolute right-3 top-3 z-10 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] opacity-0 transition hover:border-[var(--violet)] hover:bg-[var(--violet-soft)] hover:text-[var(--violet)] group-hover:opacity-100"
+        >
+          <Check className="h-3.5 w-3.5" />
+        </button>
+      ) : (
+        <span className="pointer-events-none absolute right-4 top-4 inline-flex h-2 w-2 rounded-full bg-[var(--border)]" />
+      )}
+    </div>
   );
 }
 
