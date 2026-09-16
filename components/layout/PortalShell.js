@@ -53,6 +53,7 @@ function PortalShellInner({ children, employee, companySettings }) {
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
         collapsed={desktopCollapsed}
+        employee={profile}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

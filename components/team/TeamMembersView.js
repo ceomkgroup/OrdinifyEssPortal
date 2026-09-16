@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Eye, SearchX, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ClipboardPen, Eye, Plus, SearchX, Target, Users } from "lucide-react";
 import { SearchableFilter } from "@/components/attendance/AttendanceStatusFilter";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { FlashBanner } from "@/components/ui/FlashBanner";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { TablePanel } from "@/components/ui/TablePanel";
 import { PageLoader } from "@/components/ui/Spinner";
@@ -14,6 +16,9 @@ import {
   PersonHero,
   SectionCard,
 } from "@/components/team/TeamDrawer";
+import { TeamPunchDrawer } from "@/components/team/TeamPunchDrawer";
+import { TeamRowMenu } from "@/components/team/TeamRowMenu";
+import { useTeam } from "@/components/team/TeamCapabilitiesProvider";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { formatDate, rowSerial } from "@/lib/format";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
@@ -40,8 +45,13 @@ function uniqueFilterOptions(rows, key) {
 }
 
 export function TeamMembersView() {
+  const router = useRouter();
   const { rows, meta, loading, error, refetch } = useTeamMembers();
   const { settings } = useCompanySettings();
+  const { capabilities } = useTeam();
+  const attendanceCap = capabilities?.attendance || {};
+  const canMark = Boolean(attendanceCap.markAttendance);
+  const canRegularize = Boolean(attendanceCap.apply);
   const dateFormat = settings.dateFormat || "DD/MM/YYYY";
 
   const [search, setSearch] = useState("");
@@ -56,6 +66,17 @@ export function TeamMembersView() {
   const [draftBranch, setDraftBranch] = useState("all");
   const [draftRelationship, setDraftRelationship] = useState("all");
   const [selectedMember, setSelectedMember] = useState(null);
+  const [flash, setFlash] = useState("");
+  const [punch, setPunch] = useState({
+    open: false,
+    mode: "mark",
+    member: null,
+  });
+
+  function openPunch(mode, member) {
+    setSelectedMember(null);
+    setPunch({ open: true, mode, member });
+  }
 
   const designationOptions = useMemo(
     () => uniqueFilterOptions(rows, "designation"),
@@ -266,22 +287,52 @@ export function TeamMembersView() {
       header: "Action",
       headerClassName: "w-16 text-right",
       cellClassName: "text-right",
-      cell: (row) => (
-        <button
-          type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-          aria-label="View member"
-          onClick={() => setSelectedMember(row)}
-        >
-          <Eye className="h-4 w-4" />
-        </button>
-      ),
+      cell: (row) => {
+        const items = [
+          {
+            label: "View",
+            icon: <Eye className="h-4 w-4 text-[var(--violet)]" />,
+            onClick: () => setSelectedMember(row),
+          },
+        ];
+        if (canMark) {
+          items.push({
+            label: "Mark punch",
+            icon: <Plus className="h-4 w-4 text-[var(--success)]" />,
+            onClick: () => openPunch("mark", row),
+          });
+        }
+        if (canRegularize) {
+          items.push({
+            label: "Request correction",
+            icon: <ClipboardPen className="h-4 w-4 text-[var(--violet)]" />,
+            onClick: () => openPunch("regularize", row),
+          });
+        }
+        items.push({
+          label: "View KPIs",
+          icon: <Target className="h-4 w-4 text-[var(--violet)]" />,
+          onClick: () =>
+            router.push(
+              `/team/kpi?employeeId=${encodeURIComponent(row.employeeId || "")}`
+            ),
+        });
+        return (
+          <TeamRowMenu
+            menuId={row.employeeId || row.employeeCode}
+            items={items}
+          />
+        );
+      },
     });
 
     return cols;
   }, [
+    canMark,
+    canRegularize,
     dateFormat,
     pageSize,
+    router,
     safePage,
     showBranch,
     showDepartment,
@@ -305,7 +356,7 @@ export function TeamMembersView() {
     <PortalPage
       fill
       title="Team members"
-      subtitle="People who report to you. Search or filter to find a member. Approvals live under Team → Approvals."
+      subtitle="People who report to you. Use the 3-dot menu to view a member, mark a missing punch, or request a correction for any day."
       error={error}
       actions={
         <Button type="button" variant="outline" onClick={refetch}>
@@ -313,6 +364,15 @@ export function TeamMembersView() {
         </Button>
       }
     >
+      {flash ? (
+        <FlashBanner
+          message={flash}
+          tone="success"
+          duration={4000}
+          onDismiss={() => setFlash("")}
+        />
+      ) : null}
+
       <TablePanel
         title="Direct reports"
         titleCount={total}
@@ -419,6 +479,44 @@ export function TeamMembersView() {
         wide
         title="Member details"
         subtitle={selectedMember?.employeeName || ""}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl"
+              onClick={() =>
+                router.push(
+                  `/team/kpi?employeeId=${encodeURIComponent(selectedMember?.employeeId || "")}`
+                )
+              }
+            >
+              <Target className="h-4 w-4" />
+              View KPIs
+            </Button>
+            {canMark ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-xl"
+                onClick={() => openPunch("mark", selectedMember)}
+              >
+                <Plus className="h-4 w-4" />
+                Mark punch
+              </Button>
+            ) : null}
+            {canRegularize ? (
+              <Button
+                type="button"
+                className="h-11 rounded-xl"
+                onClick={() => openPunch("regularize", selectedMember)}
+              >
+                <ClipboardPen className="h-4 w-4" />
+                Request correction
+              </Button>
+            ) : null}
+          </div>
+        }
       >
         {selectedMember ? (
           <div className="space-y-4 pb-2">
@@ -463,6 +561,17 @@ export function TeamMembersView() {
           </div>
         ) : null}
       </SlideOver>
+
+      <TeamPunchDrawer
+        open={punch.open}
+        mode={punch.mode}
+        member={punch.member}
+        members={rows}
+        onClose={() =>
+          setPunch({ open: false, mode: "mark", member: null })
+        }
+        onSuccess={(message) => setFlash(message)}
+      />
     </PortalPage>
   );
 }

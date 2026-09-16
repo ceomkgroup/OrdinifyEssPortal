@@ -12,6 +12,7 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
+import { MuiDateRangeFields } from "@/components/ui/MuiDateField";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useRoster } from "@/hooks/useRoster";
@@ -366,38 +367,27 @@ export function RosterView() {
           </div>
         </div>
 
-        <div className="flex w-full flex-col gap-1.5 lg:w-auto lg:min-w-[360px]">
+        <div className="flex w-full flex-col gap-1.5 lg:w-auto lg:min-w-[420px]">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
             Period
           </span>
-          <div className="flex flex-col gap-2 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] p-2 sm:flex-row sm:items-center">
-            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5">
-              <CalendarDays className="h-4 w-4 shrink-0 text-[var(--violet)]" />
-              <input
-                type="date"
-                value={fromDraft}
-                onChange={(e) => setFromDraft(e.target.value)}
-                aria-label="From date"
-                className="min-w-0 flex-1 border-0 bg-transparent text-[13px] font-semibold text-[var(--text)] outline-none"
-              />
-            </div>
-            <span className="hidden text-[12px] text-[var(--muted)] sm:inline">
-              to
-            </span>
-            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5">
-              <input
-                type="date"
-                value={toDraft}
-                min={fromDraft || undefined}
-                onChange={(e) => setToDraft(e.target.value)}
-                aria-label="To date"
-                className="min-w-0 flex-1 border-0 bg-transparent text-[13px] font-semibold text-[var(--text)] outline-none"
+          <div className="flex flex-col gap-2 rounded-xl border border-[var(--border)] bg-[var(--panel-soft)] p-2 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <MuiDateRangeFields
+                from={fromDraft}
+                to={toDraft}
+                onFromChange={setFromDraft}
+                onToChange={setToDraft}
+                fromLabel="From"
+                toLabel="To"
+                clearable={false}
+                dateFormat={settings.dateFormat || "DD/MM/YYYY"}
               />
             </div>
             <button
               type="button"
               onClick={applyPeriod}
-              className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-[var(--violet)] px-3.5 text-[12px] font-semibold text-white hover:brightness-110"
+              className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[var(--violet)] px-3.5 text-[12px] font-semibold text-white hover:brightness-110"
             >
               Apply
             </button>

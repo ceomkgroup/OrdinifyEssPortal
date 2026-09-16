@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Clock3,
   Home,
+  Target,
   Timer,
   UserX,
   XCircle,
@@ -55,6 +56,16 @@ const EVENT_VISUALS = {
     icon: Timer,
     tone: "info",
     label: "Overtime",
+  },
+  KPI_SELF_SCORE: {
+    icon: Target,
+    tone: "info",
+    label: "KPI",
+  },
+  KPI_RATED: {
+    icon: Target,
+    tone: "success",
+    label: "KPI rated",
   },
 };
 

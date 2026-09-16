@@ -272,3 +272,21 @@ a {
 .bell-wiggle {
   animation: bell-wiggle 1.2s ease-in-out infinite;
 }
+
+.sidebar-nav {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--violet) 28%, transparent) transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--violet) 22%, var(--border));
+  border-radius: 99px;
+}

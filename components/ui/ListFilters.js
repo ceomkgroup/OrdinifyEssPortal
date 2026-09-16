@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Loader2, Search, X } from "lucide-react";
+import { MuiDateField } from "@/components/ui/MuiDateField";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 export const REQUEST_STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
@@ -75,43 +77,24 @@ export function FilterDate({
   min,
   max,
   clearable = false,
-  defaultValue = "",
   className = "",
+  dateFormat,
 }) {
-  const canClear =
-    clearable && value != null && value !== "" && value !== defaultValue;
+  const { settings } = useCompanySettings();
+  const pickerFormat = dateFormat || settings.dateFormat || "DD/MM/YYYY";
 
   return (
-    <label className={`flex min-w-0 flex-col gap-1 ${className}`}>
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-        {label}
-      </span>
-      <div className="relative">
-        <input
-          type="date"
-          value={value || ""}
-          min={min || undefined}
-          max={max || undefined}
-          onChange={(e) => onChange?.(e.target.value)}
-          className={`h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2 pl-3 text-[13px] font-semibold text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)] ${
-            canClear ? "pr-10" : "pr-3"
-          }`}
-        />
-        {canClear ? (
-          <button
-            type="button"
-            aria-label={`Clear ${label}`}
-            onClick={(e) => {
-              e.preventDefault();
-              onChange?.(defaultValue);
-            }}
-            className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        ) : null}
-      </div>
-    </label>
+    <div className={className}>
+      <MuiDateField
+        label={label}
+        value={value}
+        onChange={onChange}
+        min={min}
+        max={max}
+        clearable={clearable}
+        dateFormat={pickerFormat}
+      />
+    </div>
   );
 }
 

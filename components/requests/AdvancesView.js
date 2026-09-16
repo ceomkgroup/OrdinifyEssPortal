@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
+import { MuiDateField } from "@/components/ui/MuiDateField";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
@@ -819,18 +820,15 @@ export function AdvancesView({
               </div>
 
               <div className="min-w-0">
-                <label className="block text-[12px] font-semibold text-[var(--text)]">
-                  Request date <span className="text-[var(--danger)]">*</span>
-                </label>
-                <input
-                  type="date"
+                <MuiDateField
+                  label="Request date"
                   required
-                  className={fieldClass}
+                  dateFormat={dateFormat}
                   value={form.requestDate}
-                  onChange={(e) =>
+                  onChange={(next) =>
                     setForm((prev) => ({
                       ...prev,
-                      requestDate: e.target.value,
+                      requestDate: next,
                     }))
                   }
                 />

@@ -1,6 +1,8 @@
 import api from "@/lib/axios";
+import { normalizeKpiScore, normalizeKpiSummary } from "@/api/kpi";
 import { TEAM_APPROVAL_TYPES } from "@/lib/team-nav";
 import { getApiErrorMessage } from "@/lib/api-error";
+import { toKpiNumber } from "@/lib/kpi";
 
 function unwrap(data, fallbackMessage) {
   if (!data?.success) {
@@ -146,10 +148,12 @@ export function normalizeTeamApprovalRow(type, row) {
     row.employee && typeof row.employee === "object" ? row.employee : {};
   const id = pickId(row, type.idFields);
   if (!id) return null;
+  const employeeId = pick(row.employeeId, employee.employeeId, employee.id);
   return {
     ...row,
     id,
     typeKey: type.key,
+    employeeId: employeeId ? String(employeeId) : "",
     employeeName:
       row.employeeName ||
       row.fullName ||
@@ -532,5 +536,108 @@ export async function listTeamAttendanceRequests({
       };
     }
     throw toApiError(err, "Failed to load attendance corrections");
+  }
+}
+
+export function normalizeTeamKpiRow(row) {
+  if (!row || typeof row !== "object") return null;
+  const employeeId = pick(row.employeeId, row.id);
+  if (!employeeId) return null;
+  return {
+    ...row,
+    employeeId: String(employeeId),
+    employeeCode: row.employeeCode || "",
+    employeeName: row.employeeName || "Employee",
+    photoUrl: row.photoUrl || null,
+    designation: row.designation || "",
+    overallScore: toKpiNumber(row.overallScore) ?? 0,
+    rating: row.rating || "",
+    kpiCount: toKpiNumber(row.kpiCount) ?? 0,
+  };
+}
+
+/**
+ * GET /api/employee/portal/team/kpi?periodId=
+ */
+export async function listTeamKpi(periodId) {
+  const id = String(periodId || "").trim();
+  if (!id) {
+    return { rows: [], meta: { allowed: true, total: 0 } };
+  }
+  try {
+    const { data } = await api.get("/api/employee/portal/team/kpi", {
+      params: { periodId: id },
+    });
+    const body = unwrap(data, "Failed to load team KPIs");
+    const allowed = body.meta?.allowed !== false;
+    const rows = asRowList(body.data)
+      .map(normalizeTeamKpiRow)
+      .filter(Boolean);
+    return {
+      rows,
+      meta: {
+        allowed,
+        total: Number(body.meta?.total) || rows.length,
+      },
+    };
+  } catch (err) {
+    if (err?.status === 403) {
+      return {
+        rows: [],
+        meta: { allowed: false, total: 0 },
+        message: getApiErrorMessage(err, "Team KPI is not available yet."),
+      };
+    }
+    throw toApiError(err, "Failed to load team KPIs");
+  }
+}
+
+/**
+ * GET /api/employee/portal/team/kpi/{employeeId}/period/{periodId}
+ */
+export async function getTeamMemberKpi(employeeId, periodId) {
+  const empId = String(employeeId || "").trim();
+  const perId = String(periodId || "").trim();
+  if (!empId || !perId) {
+    const err = new Error("Pick a team member and period first.");
+    err.code = "MISSING_KPI_TARGET";
+    throw err;
+  }
+  try {
+    const { data } = await api.get(
+      `/api/employee/portal/team/kpi/${empId}/period/${perId}`
+    );
+    const body = unwrap(data, "Failed to load this member’s KPIs");
+    return {
+      summary: normalizeKpiSummary(body.data),
+      meta: { allowed: true },
+    };
+  } catch (err) {
+    throw toApiError(err, "Failed to load this member’s KPIs");
+  }
+}
+
+/**
+ * PATCH /api/employee/portal/team/kpi/scores/{id}/rate
+ */
+export async function rateTeamKpiScore(scoreId, payload) {
+  const id = String(scoreId || "").trim();
+  if (!id) {
+    const err = new Error("Missing KPI score.");
+    err.code = "MISSING_SCORE";
+    throw err;
+  }
+  try {
+    const { data } = await api.patch(
+      `/api/employee/portal/team/kpi/scores/${id}/rate`,
+      compactBody({
+        managerScore: toKpiNumber(payload?.managerScore),
+        managerComment: payload?.managerComment,
+      })
+    );
+    const body = unwrap(data, "Failed to save manager rating");
+    return normalizeKpiScore(body.data) || body.data;
+  } catch (err) {
+    throw toApiError(err, "Failed to save manager rating");
   }
 }

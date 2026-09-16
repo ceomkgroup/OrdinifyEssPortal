@@ -1,26 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
   CalendarCheck2,
   ClipboardPen,
-  Clock3,
   Eye,
   LogIn,
   LogOut,
   Monitor,
-  MoreVertical,
   Pencil,
   Plus,
   SearchX,
 } from "lucide-react";
-import {
-  markTeamAttendance,
-  regularizeTeamAttendance,
-} from "@/api/team";
 import { AttendanceTypeBadge } from "@/components/attendance/AttendanceTypeBadge";
 import { AttendanceStatusFilter } from "@/components/attendance/AttendanceStatusFilter";
 import { useTeam } from "@/components/team/TeamCapabilitiesProvider";
@@ -31,7 +24,6 @@ import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { MetaBadge } from "@/components/ui/MetaBadge";
-import { MuiDateField } from "@/components/ui/MuiDateField";
 import { PageLoader } from "@/components/ui/Spinner";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -39,17 +31,15 @@ import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { TablePanel } from "@/components/ui/TablePanel";
 import {
   DetailField,
-  FieldBlock,
-  HintBanner,
   PersonHero,
   SectionCard,
 } from "@/components/team/TeamDrawer";
+import { TeamPunchDrawer } from "@/components/team/TeamPunchDrawer";
+import { TeamRowMenu } from "@/components/team/TeamRowMenu";
 import { useAttendanceTypes } from "@/hooks/useAttendanceTypes";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
-import { useModules } from "@/components/modules/ModulesProvider";
 import { useTeamAttendanceLogs, useTeamAttendanceRequests } from "@/hooks/useTeamAttendance";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { getApiErrorMessage } from "@/lib/api-error";
 import {
   downloadCsv,
   filterAttendanceByStatus,
@@ -61,9 +51,6 @@ import {
   formatTime,
   rowSerial,
 } from "@/lib/format";
-
-const fieldClass =
-  "mt-1.5 h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]";
 
 const RANGE_TABS = [
   { key: "week", label: "This Week" },
@@ -79,27 +66,8 @@ const REQ_STATUS_TABS = [
   { value: "rejected", label: "Rejected" },
 ];
 
-function ymdToday() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function ymdDaysAgo(days) {
-  const d = new Date();
-  d.setHours(12, 0, 0, 0);
-  if (days != null && !Number.isNaN(Number(days))) {
-    d.setDate(d.getDate() - Number(days));
-  } else {
-    d.setFullYear(d.getFullYear() - 1);
-  }
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+const fieldClass =
+  "h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]";
 
 function toDateInputValue(iso) {
   if (!iso) return "";
@@ -111,21 +79,6 @@ function toDateInputValue(iso) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function toTimeInputValue(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function toIsoFromLocal(dateStr, timeStr) {
-  if (!dateStr || !timeStr) return undefined;
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const [hh, mm] = timeStr.split(":").map(Number);
-  if (![y, m, d, hh, mm].every((n) => Number.isFinite(n))) return undefined;
-  return new Date(y, m - 1, d, hh, mm, 0, 0).toISOString();
 }
 
 function daysFromToday(ymd) {
@@ -182,57 +135,6 @@ function HoursPill({ value }) {
   );
 }
 
-function MemberCard({ person }) {
-  if (!person) return null;
-  return (
-    <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-3">
-      <Avatar name={person.employeeName} person={person} size={40} />
-      <div className="min-w-0">
-        <p className="truncate text-[14px] font-semibold text-[var(--text)]">
-          {person.employeeName || "—"}
-        </p>
-        <p className="text-[12px] text-[var(--muted)]">
-          {person.employeeCode || "Team member"}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function MemberPicker({ members, value, onChange, lockedPerson }) {
-  if (lockedPerson) {
-    return <MemberCard person={lockedPerson} />;
-  }
-
-  const selected = members.find((member) => member.employeeId === value);
-
-  return (
-    <div className="space-y-2">
-      <MemberCard person={selected} />
-      <label className="block text-[12px] font-medium text-[var(--muted)]">
-        Team member
-        <select
-          className={fieldClass}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          {!value ? <option value="">Select a team member</option> : null}
-          {members.map((member) => (
-            <option key={member.employeeId} value={member.employeeId}>
-              {member.employeeName} ({member.employeeCode})
-            </option>
-          ))}
-        </select>
-      </label>
-      {!members.length ? (
-        <p className="text-[12px] text-[var(--muted)]">
-          No team members loaded yet.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 function PunchTime({ iso, timeFormat }) {
   if (!iso) {
     return (
@@ -242,53 +144,6 @@ function PunchTime({ iso, timeFormat }) {
     );
   }
   return formatTime(iso, timeFormat);
-}
-
-function TimeCard({
-  label,
-  icon: Icon,
-  value,
-  onChange,
-  currentIso,
-  timeFormat,
-  locked,
-  emptyHint,
-}) {
-  return (
-    <div
-      className={`rounded-2xl border p-3.5 ${
-        locked
-          ? "border-[var(--border)] bg-[var(--panel-soft)]"
-          : "border-[var(--border)] bg-[var(--surface)]"
-      }`}
-    >
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--lavender-soft)] text-[var(--violet)]">
-          <Icon className="h-4 w-4" />
-        </span>
-        <div>
-          <p className="text-[12px] font-semibold text-[var(--text)]">{label}</p>
-          <p className="text-[11px] text-[var(--muted)]">
-            {currentIso
-              ? `Current ${formatTime(currentIso, timeFormat)}`
-              : emptyHint}
-          </p>
-        </div>
-      </div>
-      <input
-        className={`${fieldClass} ${locked ? "cursor-not-allowed opacity-60" : ""}`}
-        type="time"
-        value={value}
-        disabled={locked}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      {locked ? (
-        <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
-          Already punched. Use Request correction to change this time.
-        </p>
-      ) : null}
-    </div>
-  );
 }
 
 function statusTone(status) {
@@ -351,92 +206,6 @@ function teamAttendanceCsv(rows) {
   return lines.join("\r\n");
 }
 
-function RowActions({ logId, items }) {
-  const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState({ top: 0, left: 0 });
-  const buttonRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-
-    function placeMenu() {
-      const rect = buttonRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const menuWidth = 200;
-      const left = Math.min(
-        Math.max(8, rect.right - menuWidth),
-        window.innerWidth - menuWidth - 8
-      );
-      setCoords({ top: rect.bottom + 6, left });
-    }
-
-    placeMenu();
-
-    function onDocClick(event) {
-      if (
-        buttonRef.current?.contains(event.target) ||
-        event.target.closest?.(`[data-team-att-menu="${logId}"]`)
-      ) {
-        return;
-      }
-      setOpen(false);
-    }
-
-    document.addEventListener("mousedown", onDocClick);
-    window.addEventListener("resize", placeMenu);
-    window.addEventListener("scroll", placeMenu, true);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      window.removeEventListener("resize", placeMenu);
-      window.removeEventListener("scroll", placeMenu, true);
-    };
-  }, [open, logId]);
-
-  if (!items?.length) return null;
-
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-        aria-label="Row actions"
-        onClick={(event) => {
-          event.stopPropagation();
-          setOpen((v) => !v);
-        }}
-      >
-        <MoreVertical className="h-4 w-4" />
-      </button>
-      {open && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              data-team-att-menu={logId}
-              className="fixed z-[9999] w-[200px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
-              style={{ top: coords.top, left: coords.left }}
-            >
-              {items.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text)] hover:bg-[var(--panel-soft)]"
-                  onClick={() => {
-                    setOpen(false);
-                    item.onClick?.();
-                  }}
-                >
-                  {item.icon}
-                  {item.label}
-                </button>
-              ))}
-            </div>,
-            document.body
-          )
-        : null}
-    </>
-  );
-}
-
 export function TeamAttendanceView({ section = "logs" }) {
   const isLogs = section !== "corrections";
   const isCorrections = section === "corrections";
@@ -449,8 +218,6 @@ export function TeamAttendanceView({ section = "logs" }) {
   const markDays = attendanceCap.markAttendanceWindowDays;
 
   const { settings } = useCompanySettings();
-  const { hasFlag } = useModules();
-  const breakEnabled = hasFlag("breakManagement");
   const dateFormat = settings.dateFormat || "DD/MM/YYYY";
   const timeFormat = settings.timeFormat || "12h";
 
@@ -492,19 +259,12 @@ export function TeamAttendanceView({ section = "logs" }) {
   const [filterLoading, setFilterLoading] = useState(false);
 
   const [selected, setSelected] = useState(null);
-  const [mode, setMode] = useState("view");
-  const [form, setForm] = useState({
-    employeeId: "",
-    attendanceDate: "",
-    checkInTime: "",
-    checkOutTime: "",
-    breakOutTime: "",
-    breakInTime: "",
-    reason: "",
-    logId: "",
+  const [punch, setPunch] = useState({
+    open: false,
+    mode: "mark",
+    member: null,
+    log: null,
   });
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState("");
 
   const [reqStatus, setReqStatus] = useState("all");
   const [reqSearch, setReqSearch] = useState("");
@@ -708,112 +468,27 @@ export function TeamAttendanceView({ section = "logs" }) {
 
   function closePanel() {
     setSelected(null);
-    setMode("view");
-    setFormError("");
   }
 
-  function openLog(row, nextMode = "view") {
-    const date = toDateInputValue(row.attendanceDate);
-    setSelected(row);
-    setMode(nextMode);
-    setFormError("");
-    setForm({
-      employeeId: row.employeeId || "",
-      attendanceDate: date,
-      checkInTime: toTimeInputValue(row.checkInTime),
-      checkOutTime: toTimeInputValue(row.checkOutTime),
-      breakOutTime: toTimeInputValue(row.breakOutTime),
-      breakInTime: toTimeInputValue(row.breakInTime),
-      reason: "",
-      logId: row.logId || "",
-    });
-  }
+  const openPunch = useCallback((nextMode, { member = null, log = null } = {}) => {
+    setSelected(null);
+    setPunch({ open: true, mode: nextMode, member, log });
+  }, []);
+
+  const openLog = useCallback(
+    (row, nextMode = "view") => {
+      if (nextMode === "view") {
+        setPunch((prev) => ({ ...prev, open: false }));
+        setSelected(row);
+        return;
+      }
+      openPunch(nextMode, { log: row });
+    },
+    [openPunch]
+  );
 
   function openMarkBlank() {
-    setSelected(null);
-    setMode("mark");
-    setFormError("");
-    setForm({
-      employeeId: members[0]?.employeeId || "",
-      attendanceDate: ymdToday(),
-      checkInTime: "",
-      checkOutTime: "",
-      breakOutTime: "",
-      breakInTime: "",
-      reason: "",
-      logId: "",
-    });
-  }
-
-  async function submitForm() {
-    setFormError("");
-    if (!form.employeeId || !form.attendanceDate) {
-      setFormError("Employee and date are required.");
-      return;
-    }
-    if (mode === "regularize" && !form.reason.trim()) {
-      setFormError("Add a reason for this correction.");
-      return;
-    }
-    const checkInTime = toIsoFromLocal(form.attendanceDate, form.checkInTime);
-    const checkOutTime = toIsoFromLocal(form.attendanceDate, form.checkOutTime);
-    if (!checkInTime && !checkOutTime) {
-      setFormError("Enter at least check-in or check-out time.");
-      return;
-    }
-    setSaving(true);
-    try {
-      if (mode === "mark") {
-        const payload = {
-          attendanceDate: form.attendanceDate,
-        };
-        if (!selected?.checkInTime && checkInTime) {
-          payload.checkInTime = checkInTime;
-        }
-        if (!selected?.checkOutTime && checkOutTime) {
-          payload.checkOutTime = checkOutTime;
-        }
-        if (breakEnabled) {
-          if (!selected?.breakOutTime && form.breakOutTime) {
-            payload.breakOutTime = toIsoFromLocal(
-              form.attendanceDate,
-              form.breakOutTime
-            );
-          }
-          if (!selected?.breakInTime && form.breakInTime) {
-            payload.breakInTime = toIsoFromLocal(
-              form.attendanceDate,
-              form.breakInTime
-            );
-          }
-        }
-        if (!payload.checkInTime && !payload.checkOutTime) {
-          setFormError("Enter the missing check-in or check-out time.");
-          setSaving(false);
-          return;
-        }
-        await markTeamAttendance(form.employeeId, payload);
-        setFlash("Missing punch filled for this team member.");
-      } else {
-        await regularizeTeamAttendance(form.employeeId, {
-          logId: form.logId || undefined,
-          attendanceDate: selected?.attendanceDate || form.attendanceDate,
-          checkInTime,
-          checkOutTime,
-          reason: form.reason.trim(),
-        });
-        setFlash(
-          "Correction submitted. Track it under Team → Corrections while it waits for approval."
-        );
-      }
-      setFlashTone("success");
-      closePanel();
-      refetch();
-    } catch (err) {
-      setFormError(getApiErrorMessage(err, "Could not save attendance."));
-    } finally {
-      setSaving(false);
-    }
+    openPunch("mark");
   }
 
   const logColumns = useMemo(
@@ -921,7 +596,9 @@ export function TeamAttendanceView({ section = "logs" }) {
               onClick: () => openLog(row, "regularize"),
             });
           }
-          return <RowActions logId={row.logId} items={items} />;
+          return (
+            <TeamRowMenu menuId={row.logId} items={items} />
+          );
         },
       },
     ],
@@ -937,6 +614,7 @@ export function TeamAttendanceView({ section = "logs" }) {
       meta.page,
       page,
       timeFormat,
+      openLog,
     ]
   );
 
@@ -1008,14 +686,16 @@ export function TeamAttendanceView({ section = "logs" }) {
         headerClassName: "w-16 text-right",
         cellClassName: "text-right",
         cell: (row) => (
-          <button
-            type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-            aria-label="View correction"
-            onClick={() => setViewCorrection(row)}
-          >
-            <Eye className="h-4 w-4" />
-          </button>
+          <TeamRowMenu
+            menuId={row.id}
+            items={[
+              {
+                label: "View",
+                icon: <Eye className="h-4 w-4 text-[var(--violet)]" />,
+                onClick: () => setViewCorrection(row),
+              },
+            ]}
+          />
         ),
       },
     ],
@@ -1053,24 +733,9 @@ export function TeamAttendanceView({ section = "logs" }) {
     );
   }
 
-  const panelOpen = Boolean(mode === "mark" || selected);
   const lockedPerson = selected
     ? members.find((m) => m.employeeId === selected.employeeId) || selected
     : null;
-  const formMember =
-    lockedPerson || members.find((m) => m.employeeId === form.employeeId);
-  const lockIn = mode === "mark" && Boolean(selected?.checkInTime);
-  const lockOut = mode === "mark" && Boolean(selected?.checkOutTime);
-  const lockBreakOut = mode === "mark" && Boolean(selected?.breakOutTime);
-  const lockBreakIn = mode === "mark" && Boolean(selected?.breakInTime);
-  const panelTitle =
-    mode === "mark"
-      ? selected
-        ? "Fill missing punch"
-        : "Mark punch"
-      : mode === "regularize"
-        ? "Request correction"
-        : "Attendance details";
   const selectedYmd = selected
     ? toDateInputValue(selected.attendanceDate)
     : "";
@@ -1090,7 +755,7 @@ export function TeamAttendanceView({ section = "logs" }) {
       title={isLogs ? "Attendance log" : "Corrections"}
       subtitle={
         isLogs
-          ? "Daily punches for people who report to you. Fill a missing time with Mark punch. Change an existing time with Request correction."
+          ? "Daily punches for people who report to you. Use the 3-dot menu on a day, or on Team → Members, to mark a punch or request a correction."
           : "Corrections you submitted for your team. Track pending, approved, and rejected items here."
       }
       error={isLogs ? error : requests.error}
@@ -1107,6 +772,16 @@ export function TeamAttendanceView({ section = "logs" }) {
             <Button type="button" onClick={openMarkBlank}>
               <Plus className="h-4 w-4" />
               Mark punch
+            </Button>
+          ) : null}
+          {isLogs && canRegularize ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => openPunch("regularize")}
+            >
+              <ClipboardPen className="h-4 w-4" />
+              Request correction
             </Button>
           ) : null}
           <Button
@@ -1327,7 +1002,7 @@ export function TeamAttendanceView({ section = "logs" }) {
           emptyHint={
             reqHasSearchOrFilter
               ? "No corrections match your search or date filters. Try a different name or clear filters."
-              : "Open a day on Attendance log and choose Request correction. Only people who report to you can be selected."
+              : "Use a member’s 3-dot menu on Team → Members to request a correction for any day."
           }
           emptyAction={
             reqHasSearchOrFilter ? (
@@ -1362,75 +1037,40 @@ export function TeamAttendanceView({ section = "logs" }) {
       )}
 
       <SlideOver
-        open={panelOpen}
+        open={Boolean(selected)}
         onClose={closePanel}
         wide
-        title={panelTitle}
-        subtitle={
-          formMember?.employeeName ||
-          (mode === "mark" ? "Choose a team member and the missing times" : "")
-        }
+        title="Attendance details"
+        subtitle={lockedPerson?.employeeName || selected?.employeeName || ""}
         footer={
-          mode === "view" ? (
-            canFillSelected || canCorrectSelected ? (
-              <div className="flex justify-end gap-2">
-                {canFillSelected ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 rounded-xl"
-                    onClick={() => setMode("mark")}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Fill punch
-                  </Button>
-                ) : null}
-                {canCorrectSelected ? (
-                  <Button
-                    type="button"
-                    className="h-11 rounded-xl"
-                    onClick={() => setMode("regularize")}
-                  >
-                    <ClipboardPen className="h-4 w-4" />
-                    Request correction
-                  </Button>
-                ) : null}
-              </div>
-            ) : null
-          ) : (
+          canFillSelected || canCorrectSelected ? (
             <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 min-w-[100px] rounded-xl"
-                onClick={closePanel}
-                disabled={saving}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                className="h-11 min-w-[150px] rounded-xl"
-                onClick={submitForm}
-                disabled={saving}
-              >
-                {saving
-                  ? "Saving…"
-                  : mode === "mark"
-                    ? "Save punch"
-                    : "Submit correction"}
-              </Button>
+              {canFillSelected ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 rounded-xl"
+                  onClick={() => openPunch("mark", { log: selected })}
+                >
+                  <Plus className="h-4 w-4" />
+                  Fill punch
+                </Button>
+              ) : null}
+              {canCorrectSelected ? (
+                <Button
+                  type="button"
+                  className="h-11 rounded-xl"
+                  onClick={() => openPunch("regularize", { log: selected })}
+                >
+                  <ClipboardPen className="h-4 w-4" />
+                  Request correction
+                </Button>
+              ) : null}
             </div>
-          )
+          ) : null
         }
       >
-        {formError ? (
-          <p className="mb-3 rounded-xl border border-[var(--danger)]/20 bg-[var(--danger-soft)] px-3 py-2 text-[13px] text-[var(--danger)]">
-            {formError}
-          </p>
-        ) : null}
-
-        {mode === "view" && selected ? (
+        {selected ? (
           <div className="space-y-4 pb-2">
             <PersonHero
               person={lockedPerson || selected}
@@ -1507,134 +1147,24 @@ export function TeamAttendanceView({ section = "logs" }) {
               </dl>
             </SectionCard>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <HintBanner icon={Clock3}>
-              {mode === "mark" ? (
-                <span>
-                  Mark punch only fills missing times. Punched times stay
-                  locked. To change a time that already exists, use Request
-                  correction instead.
-                </span>
-              ) : (
-                <span>
-                  This sends a correction for approval. The log will not change
-                  until it is approved. Track it later under Team → Corrections.
-                </span>
-              )}
-            </HintBanner>
-
-            <MemberPicker
-              members={members}
-              value={form.employeeId}
-              lockedPerson={lockedPerson}
-              onChange={(employeeId) =>
-                setForm((prev) => ({ ...prev, employeeId }))
-              }
-            />
-
-            {selected ? (
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                  Date
-                </p>
-                <p className="mt-1 text-[14px] font-semibold text-[var(--text)]">
-                  {formatDate(selected.attendanceDate, dateFormat)}
-                </p>
-              </div>
-            ) : (
-              <MuiDateField
-                label="Attendance date"
-                required
-                dateFormat={dateFormat}
-                value={form.attendanceDate}
-                min={
-                  (mode === "mark" ? markDays : correctionDays) != null
-                    ? ymdDaysAgo(mode === "mark" ? markDays : correctionDays)
-                    : undefined
-                }
-                max={ymdToday()}
-                onChange={(next) =>
-                  setForm((prev) => ({ ...prev, attendanceDate: next }))
-                }
-              />
-            )}
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <TimeCard
-                label="Check in"
-                icon={LogIn}
-                value={form.checkInTime}
-                onChange={(checkInTime) =>
-                  setForm((prev) => ({ ...prev, checkInTime }))
-                }
-                currentIso={selected?.checkInTime}
-                timeFormat={timeFormat}
-                locked={lockIn}
-                emptyHint="Not punched yet"
-              />
-              <TimeCard
-                label="Check out"
-                icon={LogOut}
-                value={form.checkOutTime}
-                onChange={(checkOutTime) =>
-                  setForm((prev) => ({ ...prev, checkOutTime }))
-                }
-                currentIso={selected?.checkOutTime}
-                timeFormat={timeFormat}
-                locked={lockOut}
-                emptyHint="Not punched yet"
-              />
-            </div>
-
-            {mode === "mark" && breakEnabled ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <TimeCard
-                  label="Break out"
-                  icon={Clock3}
-                  value={form.breakOutTime}
-                  onChange={(breakOutTime) =>
-                    setForm((prev) => ({ ...prev, breakOutTime }))
-                  }
-                  currentIso={selected?.breakOutTime}
-                  timeFormat={timeFormat}
-                  locked={lockBreakOut}
-                  emptyHint="Optional"
-                />
-                <TimeCard
-                  label="Break in"
-                  icon={Clock3}
-                  value={form.breakInTime}
-                  onChange={(breakInTime) =>
-                    setForm((prev) => ({ ...prev, breakInTime }))
-                  }
-                  currentIso={selected?.breakInTime}
-                  timeFormat={timeFormat}
-                  locked={lockBreakIn}
-                  emptyHint="Optional"
-                />
-              </div>
-            ) : null}
-
-            {mode === "regularize" ? (
-              <FieldBlock
-                label="Reason"
-                required
-                hint="Explain why this punch needs to change"
-              >
-                <textarea
-                  className={`${fieldClass} h-24 py-2.5`}
-                  value={form.reason}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, reason: e.target.value }))
-                  }
-                  placeholder="Why does this punch need to change?"
-                />
-              </FieldBlock>
-            ) : null}
-          </div>
-        )}
+        ) : null}
       </SlideOver>
+
+      <TeamPunchDrawer
+        open={punch.open}
+        mode={punch.mode}
+        member={punch.member}
+        log={punch.log}
+        members={members}
+        onClose={() =>
+          setPunch({ open: false, mode: "mark", member: null, log: null })
+        }
+        onSuccess={(message) => {
+          setFlash(message);
+          setFlashTone("success");
+          refetch();
+        }}
+      />
 
       <SlideOver
         open={Boolean(viewCorrection)}

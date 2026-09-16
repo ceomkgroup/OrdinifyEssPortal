@@ -31,6 +31,7 @@ import { PageLoader } from "@/components/ui/Spinner";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { TablePanel } from "@/components/ui/TablePanel";
 import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
+import { MuiDateRangeFields } from "@/components/ui/MuiDateField";
 import { LeaveBalanceBoard } from "@/components/leave/LeaveBalanceBoard";
 import { useLeavePage } from "@/hooks/useLeave";
 import { useLeaveTypes } from "@/hooks/useLeaveTypes";
@@ -1615,28 +1616,16 @@ export function LeaveView({ section = "logs" }) {
             </div>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-[12px] font-medium text-[var(--muted)]">
-              From
-              <input
-                type="date"
-                className={fieldClass}
-                value={form.fromDate}
-                onChange={(e) => setField("fromDate", e.target.value)}
-                required
-              />
-            </label>
-            <label className="block text-[12px] font-medium text-[var(--muted)]">
-              To
-              <input
-                type="date"
-                className={fieldClass}
-                value={form.toDate}
-                onChange={(e) => setField("toDate", e.target.value)}
-                required
-              />
-            </label>
-          </div>
+          <MuiDateRangeFields
+            from={form.fromDate}
+            to={form.toDate}
+            onFromChange={(next) => setField("fromDate", next)}
+            onToChange={(next) => setField("toDate", next)}
+            fromLabel="From"
+            toLabel="To"
+            required
+            clearable={false}
+          />
 
           {estimatedDays != null ? (
             <div className="flex items-center gap-2 rounded-xl bg-[var(--lavender-soft)] px-3 py-2.5 text-[12px] font-medium text-[var(--violet)]">

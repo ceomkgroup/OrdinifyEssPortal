@@ -1,6 +1,7 @@
 "use client";
 
 import { MuiDateRangeFields } from "@/components/ui/MuiDateField";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 /** Attendance-style date range block for filter drawers. */
 export function FilterDrawerDateRange({
@@ -11,8 +12,11 @@ export function FilterDrawerDateRange({
   title = "Date range",
   hint = "Apply uses these dates for the list.",
   clearable = true,
+  dateFormat,
   className = "",
 }) {
+  const { settings } = useCompanySettings();
+  const pickerFormat = dateFormat || settings.dateFormat || "DD/MM/YYYY";
   const hasDates = Boolean(from || to);
 
   return (
@@ -42,6 +46,7 @@ export function FilterDrawerDateRange({
         onFromChange={onFromChange}
         onToChange={onToChange}
         clearable={clearable}
+        dateFormat={pickerFormat}
       />
       {hint ? (
         <p className="text-[11px] leading-relaxed text-[var(--muted)]">{hint}</p>

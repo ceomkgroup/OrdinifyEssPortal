@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   Eye,
   Inbox,
-  MoreVertical,
   RefreshCw,
   X,
 } from "lucide-react";
@@ -24,7 +22,10 @@ import {
   PersonHero,
   SectionCard,
 } from "@/components/team/TeamDrawer";
+import { TeamRowMenu } from "@/components/team/TeamRowMenu";
 import { useTeam } from "@/components/team/TeamCapabilitiesProvider";
+import { SearchableFilter } from "@/components/attendance/AttendanceStatusFilter";
+import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useTeamApprovalList } from "@/hooks/useTeamApprovals";
 import { usePortalQuery } from "@/hooks/usePortalQuery";
@@ -36,6 +37,10 @@ import {
   formatTime,
   rowSerial,
 } from "@/lib/format";
+import {
+  countActiveDateFilters,
+  rowMatchesDateRange,
+} from "@/lib/request-date-filter";
 import { getTeamApprovalType } from "@/lib/team-nav";
 
 const fieldClass =
@@ -57,6 +62,36 @@ function periodLabel(fromDate, toDate, dateFormat) {
   const to = formatDate(toDate, dateFormat);
   if (!fromDate || !toDate || from === to) return from || to;
   return `${from} – ${to}`;
+}
+
+function emptyApprovalFilters() {
+  return {
+    dateFrom: "",
+    dateTo: "",
+    employeeId: "all",
+    leaveType: "all",
+    shiftName: "all",
+    location: "all",
+  };
+}
+
+function uniqueFilterOptions(rows, getValue, getLabel) {
+  const seen = new Map();
+  for (const row of rows) {
+    const value = String(getValue(row) || "").trim();
+    if (!value || seen.has(value)) continue;
+    seen.set(value, {
+      value,
+      label: getLabel ? getLabel(row, value) : value,
+    });
+  }
+  return Array.from(seen.values()).sort((a, b) =>
+    a.label.localeCompare(b.label)
+  );
+}
+
+function rowEmployeeKey(row) {
+  return String(row.employeeId || row.employeeCode || row.employeeName || "");
 }
 
 function summaryFor(typeKey, row, dateFormat, timeFormat, currency) {
@@ -89,111 +124,30 @@ function summaryFor(typeKey, row, dateFormat, timeFormat, currency) {
 }
 
 function RowActions({ requestId, canDecide, onView, onApprove, onReject }) {
-  const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState({ top: 0, left: 0 });
-  const buttonRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-
-    function placeMenu() {
-      const rect = buttonRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const menuWidth = 176;
-      const left = Math.min(
-        Math.max(8, rect.right - menuWidth),
-        window.innerWidth - menuWidth - 8
-      );
-      setCoords({ top: rect.bottom + 6, left });
-    }
-
-    placeMenu();
-
-    function onDocClick(event) {
-      if (
-        buttonRef.current?.contains(event.target) ||
-        event.target.closest?.(`[data-team-menu="${requestId}"]`)
-      ) {
-        return;
+  const items = [
+    {
+      label: "View",
+      icon: <Eye className="h-4 w-4 text-[var(--violet)]" />,
+      onClick: onView,
+    },
+  ];
+  if (canDecide) {
+    items.push(
+      {
+        label: "Approve",
+        icon: <Check className="h-4 w-4" />,
+        tone: "success",
+        onClick: onApprove,
+      },
+      {
+        label: "Reject",
+        icon: <X className="h-4 w-4" />,
+        tone: "danger",
+        onClick: onReject,
       }
-      setOpen(false);
-    }
-
-    document.addEventListener("mousedown", onDocClick);
-    window.addEventListener("resize", placeMenu);
-    window.addEventListener("scroll", placeMenu, true);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      window.removeEventListener("resize", placeMenu);
-      window.removeEventListener("scroll", placeMenu, true);
-    };
-  }, [open, requestId]);
-
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--panel-soft)] hover:text-[var(--text)]"
-        aria-label="Row actions"
-        aria-expanded={open}
-        onClick={(event) => {
-          event.stopPropagation();
-          setOpen((v) => !v);
-        }}
-      >
-        <MoreVertical className="h-4 w-4" />
-      </button>
-      {open && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              data-team-menu={requestId}
-              className="fixed z-[9999] w-44 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
-              style={{ top: coords.top, left: coords.left }}
-            >
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text)] hover:bg-[var(--panel-soft)]"
-                onClick={() => {
-                  setOpen(false);
-                  onView?.();
-                }}
-              >
-                <Eye className="h-4 w-4 text-[var(--violet)]" />
-                View
-              </button>
-              {canDecide ? (
-                <>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--success)] hover:bg-[var(--success-soft)]"
-                    onClick={() => {
-                      setOpen(false);
-                      onApprove?.();
-                    }}
-                  >
-                    <Check className="h-4 w-4" />
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--danger)] hover:bg-[var(--danger-soft)]"
-                    onClick={() => {
-                      setOpen(false);
-                      onReject?.();
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                    Reject
-                  </button>
-                </>
-              ) : null}
-            </div>,
-            document.body
-          )
-        : null}
-    </>
-  );
+    );
+  }
+  return <TeamRowMenu menuId={requestId} items={items} />;
 }
 
 function requestFacts(typeKey, row, dateFormat, timeFormat, currency) {
@@ -294,6 +248,8 @@ export function TeamApprovalsView() {
   const [flash, setFlash] = useState("");
   const [flashTone, setFlashTone] = useState("success");
   const [search, setSearch] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState(emptyApprovalFilters);
+  const [draftFilters, setDraftFilters] = useState(emptyApprovalFilters);
   const [selected, setSelected] = useState(null);
   const [mode, setMode] = useState("view");
   const [comments, setComments] = useState("");
@@ -319,11 +275,104 @@ export function TeamApprovalsView() {
     };
   }, [idFromUrl, rows]);
 
+  const employeeOptions = useMemo(
+    () => [
+      { value: "all", label: "All employees" },
+      ...uniqueFilterOptions(
+        rows,
+        rowEmployeeKey,
+        (row) =>
+          row.employeeName
+            ? `${row.employeeName}${
+                row.employeeCode ? ` (${row.employeeCode})` : ""
+              }`
+            : row.employeeCode || rowEmployeeKey(row)
+      ),
+    ],
+    [rows]
+  );
+
+  const leaveTypeOptions = useMemo(
+    () => [
+      { value: "all", label: "All leave types" },
+      ...uniqueFilterOptions(rows, (row) => row.leaveTypeName),
+    ],
+    [rows]
+  );
+
+  const shiftOptions = useMemo(
+    () => [
+      { value: "all", label: "All shifts" },
+      ...uniqueFilterOptions(rows, (row) => row.requestedShiftName),
+    ],
+    [rows]
+  );
+
+  const locationOptions = useMemo(
+    () => [
+      { value: "all", label: "All locations" },
+      ...uniqueFilterOptions(rows, (row) => row.location),
+    ],
+    [rows]
+  );
+
+  const activeFilterCount = useMemo(() => {
+    let count = countActiveDateFilters(
+      appliedFilters.dateFrom,
+      appliedFilters.dateTo
+    );
+    if (appliedFilters.employeeId !== "all") count += 1;
+    if (activeKey === "leave" && appliedFilters.leaveType !== "all") count += 1;
+    if (activeKey === "shiftChange" && appliedFilters.shiftName !== "all") {
+      count += 1;
+    }
+    if (activeKey === "onDuty" && appliedFilters.location !== "all") count += 1;
+    return count;
+  }, [activeKey, appliedFilters]);
+
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) =>
-      [
+    return rows.filter((row) => {
+      if (
+        appliedFilters.employeeId !== "all" &&
+        rowEmployeeKey(row) !== appliedFilters.employeeId
+      ) {
+        return false;
+      }
+      if (
+        activeKey === "leave" &&
+        appliedFilters.leaveType !== "all" &&
+        String(row.leaveTypeName || "") !== appliedFilters.leaveType
+      ) {
+        return false;
+      }
+      if (
+        activeKey === "shiftChange" &&
+        appliedFilters.shiftName !== "all" &&
+        String(row.requestedShiftName || "") !== appliedFilters.shiftName
+      ) {
+        return false;
+      }
+      if (
+        activeKey === "onDuty" &&
+        appliedFilters.location !== "all" &&
+        String(row.location || "") !== appliedFilters.location
+      ) {
+        return false;
+      }
+      if (
+        !rowMatchesDateRange(row, appliedFilters.dateFrom, appliedFilters.dateTo, [
+          "createdAt",
+          "submittedAt",
+          "attendanceDate",
+          "effectiveDate",
+          "workDate",
+        ])
+      ) {
+        return false;
+      }
+      if (!q) return true;
+      return [
         row.employeeName,
         row.employeeCode,
         row.reason,
@@ -335,9 +384,15 @@ export function TeamApprovalsView() {
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
-        .includes(q)
-    );
-  }, [rows, search]);
+        .includes(q);
+    });
+  }, [activeKey, appliedFilters, rows, search]);
+
+  function resetApprovalFilters() {
+    const cleared = emptyApprovalFilters();
+    setAppliedFilters(cleared);
+    setDraftFilters(cleared);
+  }
 
   function openRow(row, nextMode = "view") {
     setSelected(row);
@@ -545,12 +600,81 @@ export function TeamApprovalsView() {
         tab={activeKey}
         onTabChange={(next) => {
           setSearch("");
+          resetApprovalFilters();
           closePanel();
           replaceQuery({ type: next, id: "" });
         }}
+        recordCount={
+          search.trim() || activeFilterCount > 0
+            ? filteredRows.length
+            : meta.total
+        }
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search employee, code, reason…"
+        filterTitle="Filters"
+        filterSubtitle="Date range, employee, and type-specific filters"
+        filterActive={activeFilterCount > 0}
+        activeFilterCount={activeFilterCount}
+        drawerFields={
+          <div className="space-y-5">
+            <SearchableFilter
+              label="Employee"
+              value={draftFilters.employeeId}
+              onChange={(next) =>
+                setDraftFilters((prev) => ({ ...prev, employeeId: next }))
+              }
+              options={employeeOptions}
+              defaultValue="all"
+            />
+            {activeKey === "leave" && leaveTypeOptions.length > 1 ? (
+              <SearchableFilter
+                label="Leave type"
+                value={draftFilters.leaveType}
+                onChange={(next) =>
+                  setDraftFilters((prev) => ({ ...prev, leaveType: next }))
+                }
+                options={leaveTypeOptions}
+                defaultValue="all"
+              />
+            ) : null}
+            {activeKey === "shiftChange" && shiftOptions.length > 1 ? (
+              <SearchableFilter
+                label="Requested shift"
+                value={draftFilters.shiftName}
+                onChange={(next) =>
+                  setDraftFilters((prev) => ({ ...prev, shiftName: next }))
+                }
+                options={shiftOptions}
+                defaultValue="all"
+              />
+            ) : null}
+            {activeKey === "onDuty" && locationOptions.length > 1 ? (
+              <SearchableFilter
+                label="Location"
+                value={draftFilters.location}
+                onChange={(next) =>
+                  setDraftFilters((prev) => ({ ...prev, location: next }))
+                }
+                options={locationOptions}
+                defaultValue="all"
+              />
+            ) : null}
+            <FilterDrawerDateRange
+              from={draftFilters.dateFrom}
+              to={draftFilters.dateTo}
+              onFromChange={(next) =>
+                setDraftFilters((prev) => ({ ...prev, dateFrom: next }))
+              }
+              onToChange={(next) =>
+                setDraftFilters((prev) => ({ ...prev, dateTo: next }))
+              }
+              hint="Apply uses period, attendance, or submitted date."
+            />
+          </div>
+        }
+        onApplyFilters={() => setAppliedFilters({ ...draftFilters })}
+        onResetFilters={resetApprovalFilters}
         onRefresh={refetch}
         columns={columns}
         rows={filteredRows}
@@ -564,7 +688,9 @@ export function TeamApprovalsView() {
         emptyHint={
           meta.allowed === false
             ? "You do not have access to this approval type."
-            : "When your team submits this request type, it will land here until you decide. Approved items are not kept in this list."
+            : search.trim() || activeFilterCount > 0
+              ? "No pending requests match these filters."
+              : "When your team submits this request type, it will land here until you decide. Approved items are not kept in this list."
         }
         showPagination={false}
       />

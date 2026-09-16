@@ -20,6 +20,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
+import { MuiDateRangeFields } from "@/components/ui/MuiDateField";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
@@ -711,41 +712,28 @@ export function OnDutyView({ timeFormat = "12h", dateFormat = "DD/MM/YYYY" }) {
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="min-w-0">
-                <label className="block text-[12px] font-semibold text-[var(--text)]">
-                  From date <span className="text-[var(--danger)]">*</span>
-                </label>
-                <input
-                  type="date"
-                  required
-                  className={fieldClass}
-                  value={form.fromDate}
-                  onChange={(e) =>
+              <div className="min-w-0 sm:col-span-2">
+                <MuiDateRangeFields
+                  from={form.fromDate}
+                  to={form.toDate}
+                  onFromChange={(next) =>
                     setForm((prev) => ({
                       ...prev,
-                      fromDate: e.target.value,
+                      fromDate: next,
                       toDate:
-                        prev.toDate && prev.toDate < e.target.value
-                          ? e.target.value
+                        prev.toDate && next && prev.toDate < next
+                          ? next
                           : prev.toDate,
                     }))
                   }
-                />
-              </div>
-
-              <div className="min-w-0">
-                <label className="block text-[12px] font-semibold text-[var(--text)]">
-                  To date <span className="text-[var(--danger)]">*</span>
-                </label>
-                <input
-                  type="date"
-                  required
-                  min={form.fromDate || undefined}
-                  className={fieldClass}
-                  value={form.toDate}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, toDate: e.target.value }))
+                  onToChange={(next) =>
+                    setForm((prev) => ({ ...prev, toDate: next }))
                   }
+                  fromLabel="From date"
+                  toLabel="To date"
+                  required
+                  clearable={false}
+                  dateFormat={dateFormat}
                 />
               </div>
 

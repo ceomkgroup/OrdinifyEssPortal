@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
+import { MuiDateField } from "@/components/ui/MuiDateField";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
@@ -664,21 +665,18 @@ export function ShiftChangeView({
             </p>
           ) : null}
 
-          <label className="block text-[12px] font-medium text-[var(--muted)]">
-            Effective date
-            <input
-              type="date"
-              required
-              className={fieldClass}
-              value={form.effectiveDate}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  effectiveDate: e.target.value,
-                }))
-              }
-            />
-          </label>
+          <MuiDateField
+            label="Effective date"
+            required
+            dateFormat={dateFormat}
+            value={form.effectiveDate}
+            onChange={(next) =>
+              setForm((prev) => ({
+                ...prev,
+                effectiveDate: next,
+              }))
+            }
+          />
 
           <label className="block text-[12px] font-medium text-[var(--muted)]">
             Reason

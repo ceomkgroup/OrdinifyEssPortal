@@ -19,6 +19,8 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { TablePanel } from "@/components/ui/TablePanel";
 import { ComingSoon } from "@/components/ui/ComingSoon";
 import { PageLoader } from "@/components/ui/Spinner";
+import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
+import { SearchableFilter } from "@/components/attendance/AttendanceStatusFilter";
 import { useModules } from "@/components/modules/ModulesProvider";
 import {
   acknowledgeOrgDoc,
@@ -35,6 +37,10 @@ import {
 } from "@/hooks/usePortalQuery";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { formatDate, formatDateTime, rowSerial } from "@/lib/format";
+import {
+  countActiveDateFilters,
+  dateInRange,
+} from "@/lib/request-date-filter";
 
 function formatBytes(bytes) {
   const n = Number(bytes);
@@ -220,6 +226,10 @@ export function CompanyDocumentsView({
     readQueryString(searchParams, "categoryId", "")
   );
   const [draftCategoryId, setDraftCategoryId] = useState(categoryId);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [draftDateFrom, setDraftDateFrom] = useState("");
+  const [draftDateTo, setDraftDateTo] = useState("");
   /** Debounced search sent to API (URL still updates live) */
   const [searchApplied, setSearchApplied] = useState(listQuery);
 
@@ -230,7 +240,14 @@ export function CompanyDocumentsView({
   );
 
   useEffect(() => {
-    setDraftCategoryId(categoryId);
+    let alive = true;
+    queueMicrotask(() => {
+      if (!alive) return;
+      setDraftCategoryId(categoryId);
+    });
+    return () => {
+      alive = false;
+    };
   }, [categoryId]);
 
   useEffect(() => {
@@ -268,10 +285,33 @@ export function CompanyDocumentsView({
   const currentPage = Number(meta?.page) || page;
   const totalPages = Math.max(1, Number(meta?.totalPages) || 1);
 
+  const categoryOptions = useMemo(
+    () => [
+      { value: "", label: "All categories" },
+      ...categories.map((cat) => ({
+        value: String(cat.categoryId),
+        label: cat.name || "Category",
+      })),
+    ],
+    [categories]
+  );
+
   const categoryLabel = useMemo(() => {
     if (!categoryId) return null;
     return categories.find((c) => c.categoryId === categoryId)?.name || null;
   }, [categories, categoryId]);
+
+  const dateFilterCount = countActiveDateFilters(dateFrom, dateTo);
+  const activeFilterCount = (categoryId ? 1 : 0) + dateFilterCount;
+
+  const filteredRows = useMemo(() => {
+    if (!dateFrom && !dateTo) return rows;
+    return (rows || []).filter((row) =>
+      ["expiryDate", "createdAt", "approvedAt", "updatedAt"].some((field) =>
+        dateInRange(row?.[field], dateFrom, dateTo)
+      )
+    );
+  }, [rows, dateFrom, dateTo]);
 
   async function openDetail(row) {
     setSelected(row);
@@ -470,49 +510,55 @@ export function CompanyDocumentsView({
         title="Library"
         titleCount={total}
         titleCountLabel="Total documents"
+        recordCount={dateFilterCount > 0 ? filteredRows.length : total}
         search={listQuery}
         onSearchChange={setListQuery}
         searchPlaceholder="Search by title…"
         filterTitle="Filters"
-        filterSubtitle="Filter by category"
-        filterActive={Boolean(categoryId)}
-        activeFilterCount={categoryId ? 1 : 0}
+        filterSubtitle="Category and date range"
+        filterActive={activeFilterCount > 0}
+        activeFilterCount={activeFilterCount}
         drawerFields={
-          <label className="block">
-            <span className="mb-1.5 block text-[12px] font-semibold text-[var(--text)]">
-              Category
-            </span>
-            <select
-              className="h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] font-semibold text-[var(--text)] outline-none focus:border-[var(--violet)]"
+          <div className="space-y-5">
+            <SearchableFilter
+              label="Category"
               value={draftCategoryId}
-              onChange={(e) => setDraftCategoryId(e.target.value)}
-            >
-              <option value="">All categories</option>
-              {categories.map((cat) => (
-                <option key={cat.categoryId} value={cat.categoryId}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
+              onChange={setDraftCategoryId}
+              options={categoryOptions}
+              defaultValue=""
+            />
             {categoryLabel ? (
-              <p className="mt-2 text-[11px] text-[var(--muted)]">
+              <p className="-mt-3 text-[11px] text-[var(--muted)]">
                 Active: {categoryLabel}
               </p>
             ) : null}
-          </label>
+            <FilterDrawerDateRange
+              from={draftDateFrom}
+              to={draftDateTo}
+              onFromChange={setDraftDateFrom}
+              onToChange={setDraftDateTo}
+              hint="Apply uses published, expiry, or updated date."
+            />
+          </div>
         }
         onApplyFilters={() => {
           setCategoryId(draftCategoryId);
+          setDateFrom(draftDateFrom);
+          setDateTo(draftDateTo);
           setPage(1);
         }}
         onResetFilters={() => {
           setDraftCategoryId("");
           setCategoryId("");
+          setDraftDateFrom("");
+          setDraftDateTo("");
+          setDateFrom("");
+          setDateTo("");
           setPage(1);
         }}
         onRefresh={refetch}
         columns={columns}
-        rows={rows}
+        rows={filteredRows}
         getRowKey={(row) => row.documentId}
         minWidth="760px"
         loading={loading}
@@ -522,14 +568,14 @@ export function CompanyDocumentsView({
         emptyIcon={Inbox}
         emptyTitle="No documents found"
         emptyHint={
-          categoryId || searchApplied
-            ? "Try clearing search or category filter."
+          categoryId || searchApplied || dateFilterCount > 0
+            ? "Try clearing search or filters."
             : "When HR publishes policies, they will appear here."
         }
         page={currentPage}
         pageSize={limit}
-        total={total}
-        totalPages={totalPages}
+        total={dateFilterCount > 0 ? filteredRows.length : total}
+        totalPages={dateFilterCount > 0 ? 1 : totalPages}
         onPageChange={setPage}
         onPageSizeChange={(n) => {
           setLimit(n);

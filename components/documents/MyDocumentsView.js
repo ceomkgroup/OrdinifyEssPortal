@@ -22,6 +22,9 @@ import { SoftStat } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { TablePanel } from "@/components/ui/TablePanel";
+import { MuiDateField } from "@/components/ui/MuiDateField";
+import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
+import { SearchableFilter } from "@/components/attendance/AttendanceStatusFilter";
 import { ComingSoon } from "@/components/ui/ComingSoon";
 import { PageLoader } from "@/components/ui/Spinner";
 import { useModules } from "@/components/modules/ModulesProvider";
@@ -40,6 +43,10 @@ import {
 } from "@/hooks/usePortalQuery";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { formatDate, formatDateTime, rowSerial } from "@/lib/format";
+import {
+  countActiveDateFilters,
+  dateInRange,
+} from "@/lib/request-date-filter";
 
 const fieldClass =
   "mt-1.5 h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]";
@@ -187,6 +194,12 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
   const [statusTab, setStatusTab] = useState(() =>
     readQueryString(searchParams, "status", "all")
   );
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [draftTypeFilter, setDraftTypeFilter] = useState("all");
+  const [draftDateFrom, setDraftDateFrom] = useState("");
+  const [draftDateTo, setDraftDateTo] = useState("");
 
   usePersistListQuery(
     { page, limit, q: listQuery, status: statusTab },
@@ -221,6 +234,20 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
     [types, form.docTypeId]
   );
 
+  const typeOptions = useMemo(
+    () => [
+      { value: "all", label: "All types" },
+      ...types.map((t) => ({
+        value: String(t.docTypeId),
+        label: t.text || t.docType || "Document",
+      })),
+    ],
+    [types]
+  );
+
+  const activeFilterCount =
+    (typeFilter !== "all" ? 1 : 0) + countActiveDateFilters(dateFrom, dateTo);
+
   const filteredRows = useMemo(() => {
     const q = listQuery.trim().toLowerCase();
     return (rows || []).filter((row) => {
@@ -229,6 +256,18 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
         if (!(vs === "verified" || vs === "approved")) return false;
       } else if (statusTab === "pending") {
         if (!(vs === "pending" || vs === "submitted")) return false;
+      }
+      if (
+        typeFilter !== "all" &&
+        String(row.docTypeId || "") !== String(typeFilter)
+      ) {
+        return false;
+      }
+      if (dateFrom || dateTo) {
+        const inRange = ["issueDate", "startDate", "expiryDate", "createdAt"].some(
+          (field) => dateInRange(row?.[field], dateFrom, dateTo)
+        );
+        if (!inRange) return false;
       }
       if (!q) return true;
       const hay = [
@@ -242,7 +281,7 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [rows, listQuery, statusTab]);
+  }, [rows, listQuery, statusTab, typeFilter, dateFrom, dateTo]);
 
   const total = Number(meta?.total) || 0;
   const currentPage = Number(meta?.page) || page;
@@ -520,13 +559,50 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
           setPage(1);
         }}
         recordCount={
-          listQuery.trim() || statusTab !== "all"
+          listQuery.trim() || statusTab !== "all" || activeFilterCount > 0
             ? filteredRows.length
             : total
         }
         search={listQuery}
         onSearchChange={setListQuery}
         searchPlaceholder="Search by type, number…"
+        filterTitle="Filters"
+        filterSubtitle="Document type and date range"
+        filterActive={activeFilterCount > 0}
+        activeFilterCount={activeFilterCount}
+        drawerFields={
+          <div className="space-y-5">
+            <SearchableFilter
+              label="Document type"
+              value={draftTypeFilter}
+              onChange={setDraftTypeFilter}
+              options={typeOptions}
+              defaultValue="all"
+            />
+            <FilterDrawerDateRange
+              from={draftDateFrom}
+              to={draftDateTo}
+              onFromChange={setDraftDateFrom}
+              onToChange={setDraftDateTo}
+              hint="Apply uses issue, start, expiry, or uploaded date."
+            />
+          </div>
+        }
+        onApplyFilters={() => {
+          setTypeFilter(draftTypeFilter);
+          setDateFrom(draftDateFrom);
+          setDateTo(draftDateTo);
+          setPage(1);
+        }}
+        onResetFilters={() => {
+          setDraftTypeFilter("all");
+          setTypeFilter("all");
+          setDraftDateFrom("");
+          setDraftDateTo("");
+          setDateFrom("");
+          setDateTo("");
+          setPage(1);
+        }}
         onRefresh={refreshAll}
         columns={columns}
         rows={filteredRows}
@@ -538,8 +614,13 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
         error={error}
         emptyIcon={Inbox}
         emptyTitle="No documents found"
-        emptyHint="Upload your CNIC, passport, or other HR documents."
+        emptyHint={
+          listQuery.trim() || statusTab !== "all" || activeFilterCount > 0
+            ? "Try clearing search or filters."
+            : "Upload your CNIC, passport, or other HR documents."
+        }
         emptyAction={
+          listQuery.trim() || statusTab !== "all" || activeFilterCount > 0 ? null : (
           <Button
             type="button"
             className="h-10 rounded-xl"
@@ -548,16 +629,19 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
             <Plus className="h-4 w-4" />
             Upload document
           </Button>
+          )
         }
         page={currentPage}
         pageSize={limit}
         total={
-          listQuery.trim() || statusTab !== "all"
+          listQuery.trim() || statusTab !== "all" || activeFilterCount > 0
             ? filteredRows.length
             : total
         }
         totalPages={
-          listQuery.trim() || statusTab !== "all" ? 1 : totalPages
+          listQuery.trim() || statusTab !== "all" || activeFilterCount > 0
+            ? 1
+            : totalPages
         }
         onPageChange={setPage}
         onPageSizeChange={(n) => {
@@ -642,17 +726,14 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
               </div>
 
               <div className="min-w-0">
-                <label className="block text-[12px] font-semibold text-[var(--text)]">
-                  Issue date
-                </label>
-                <input
-                  type="date"
-                  className={fieldClass}
+                <MuiDateField
+                  label="Issue date"
+                  dateFormat={dateFormat}
                   value={form.issueDate}
-                  onChange={(e) =>
+                  onChange={(next) =>
                     setForm((prev) => ({
                       ...prev,
-                      issueDate: e.target.value,
+                      issueDate: next,
                     }))
                   }
                 />
@@ -684,21 +765,15 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
 
               {selectedType?.allowStartDate ? (
                 <div className="min-w-0">
-                  <label className="block text-[12px] font-semibold text-[var(--text)]">
-                    Start date
-                    {selectedType.allowStartDateMandatory ? (
-                      <span className="text-[var(--danger)]"> *</span>
-                    ) : null}
-                  </label>
-                  <input
-                    type="date"
+                  <MuiDateField
+                    label="Start date"
                     required={selectedType.allowStartDateMandatory}
-                    className={fieldClass}
+                    dateFormat={dateFormat}
                     value={form.startDate}
-                    onChange={(e) =>
+                    onChange={(next) =>
                       setForm((prev) => ({
                         ...prev,
-                        startDate: e.target.value,
+                        startDate: next,
                       }))
                     }
                   />
@@ -707,21 +782,16 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
 
               {selectedType?.allowExpiryDate ? (
                 <div className="min-w-0">
-                  <label className="block text-[12px] font-semibold text-[var(--text)]">
-                    Expiry date
-                    {selectedType.allowExpiryDateMandatory ? (
-                      <span className="text-[var(--danger)]"> *</span>
-                    ) : null}
-                  </label>
-                  <input
-                    type="date"
+                  <MuiDateField
+                    label="Expiry date"
                     required={selectedType.allowExpiryDateMandatory}
-                    className={fieldClass}
+                    dateFormat={dateFormat}
+                    min={form.startDate || form.issueDate || undefined}
                     value={form.expiryDate}
-                    onChange={(e) =>
+                    onChange={(next) =>
                       setForm((prev) => ({
                         ...prev,
-                        expiryDate: e.target.value,
+                        expiryDate: next,
                       }))
                     }
                   />

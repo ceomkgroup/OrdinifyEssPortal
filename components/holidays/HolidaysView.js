@@ -8,7 +8,8 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ListToolbar } from "@/components/ui/ListToolbar";
@@ -283,6 +284,195 @@ function HolidayLogItem({
   );
 }
 
+function HolidayHoverCard({ holidays, dateFormat, tipRef, coords }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      ref={tipRef}
+      role="tooltip"
+      className="pointer-events-none fixed z-[9999] w-64 max-w-[calc(100vw-24px)] rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left shadow-[0_16px_40px_rgba(15,23,42,0.18)]"
+      style={{
+        top: coords.top,
+        left: coords.left,
+        visibility: coords.ready ? "visible" : "hidden",
+      }}
+    >
+      {holidays.map((h, hi) => {
+        const hDays = daysUntil(h.fromDate);
+        const hPassed = hDays != null && hDays < 0;
+        return (
+          <div
+            key={`${h.occurrenceId || h.holidayId || h.title}-${hi}`}
+            className={hi > 0 ? "mt-2.5 border-t border-[var(--border)] pt-2.5" : ""}
+          >
+            <p className="text-[12px] font-semibold leading-snug text-[var(--text)]">
+              {h.title}
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
+              {holidayMetaLine(h, dateFormat)}
+            </p>
+            {h.description ? (
+              <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
+                {h.description}
+              </p>
+            ) : null}
+            <p
+              className={`mt-1.5 text-[10px] font-semibold ${
+                hPassed ? "text-[var(--muted)]" : "text-[var(--violet)]"
+              }`}
+            >
+              {formatCountdown(hDays) || "—"}
+            </p>
+          </div>
+        );
+      })}
+    </div>,
+    document.body
+  );
+}
+
+function CalendarDayButton({
+  cell,
+  todayKey,
+  selectedDateKey,
+  dateFormat,
+  onSelectDate,
+}) {
+  const buttonRef = useRef(null);
+  const tipRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, ready: false });
+
+  const hasHoliday = cell.holidays.length > 0;
+  const isToday = cell.key === todayKey;
+  const primary = cell.holidays[0];
+  const color = primary?.colorCode || "#7b39ec";
+  const days = hasHoliday ? daysUntil(primary.fromDate) : null;
+  const isPassed = days != null && days < 0;
+  const isUpcoming = days != null && days >= 0;
+  const isSelected = cell.key === selectedDateKey;
+
+  useEffect(() => {
+    if (!open || !hasHoliday) return undefined;
+
+    function placeTip() {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      const tip = tipRef.current;
+      if (!rect) return;
+      const width = tip?.offsetWidth || 256;
+      const height = tip?.offsetHeight || 120;
+      const pad = 12;
+      const maxLeft = Math.max(pad, window.innerWidth - width - pad);
+      let left = rect.left + rect.width / 2 - width / 2;
+      left = Math.min(Math.max(pad, left), maxLeft);
+      const spaceBelow = window.innerHeight - rect.bottom - pad;
+      const showAbove = spaceBelow < height + 8 && rect.top > height + pad;
+      const top = showAbove
+        ? Math.max(pad, rect.top - height - 8)
+        : rect.bottom + 8;
+      setCoords({ top, left, ready: true });
+    }
+
+    const frame = requestAnimationFrame(() => {
+      placeTip();
+      requestAnimationFrame(placeTip);
+    });
+    window.addEventListener("resize", placeTip);
+    window.addEventListener("scroll", placeTip, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", placeTip);
+      window.removeEventListener("scroll", placeTip, true);
+    };
+  }, [open, hasHoliday, cell.key, cell.holidays.length]);
+
+  function showTip() {
+    if (hasHoliday) setOpen(true);
+  }
+
+  return (
+    <button
+      type="button"
+      ref={buttonRef}
+      onClick={() => onSelectDate?.(cell.key)}
+      onMouseEnter={showTip}
+      onMouseLeave={() => {
+        setOpen(false);
+        setCoords({ top: 0, left: 0, ready: false });
+      }}
+      onFocus={showTip}
+      onBlur={() => {
+        setOpen(false);
+        setCoords({ top: 0, left: 0, ready: false });
+      }}
+      className={`relative min-h-12 overflow-visible rounded-xl border p-1.5 text-left transition ${
+        isSelected
+          ? "border-[var(--violet)] bg-[var(--lavender-soft)]/60 ring-2 ring-[var(--violet)]/25"
+          : hasHoliday
+            ? isPassed
+              ? "border-[var(--border)] bg-[var(--panel-soft)]/80 opacity-80"
+              : "border-transparent"
+            : isToday
+              ? "border-[var(--violet)]/30 bg-[var(--lavender-soft)]/40"
+              : "border-transparent bg-[var(--panel-soft)]/40"
+      }`}
+      style={
+        hasHoliday && !isPassed
+          ? {
+              backgroundColor: `${color}18`,
+              boxShadow: `inset 0 0 0 1px ${color}55`,
+            }
+          : hasHoliday && isPassed
+            ? { boxShadow: "inset 0 0 0 1px var(--border)" }
+            : undefined
+      }
+    >
+      <div className="flex items-start justify-between gap-0.5">
+        <p
+          className={`text-[11px] font-semibold tabular-nums ${
+            isToday
+              ? "text-[var(--violet)]"
+              : hasHoliday && isUpcoming
+                ? "text-[var(--text)]"
+                : "text-[var(--muted)]"
+          }`}
+        >
+          {cell.day}
+        </p>
+        {hasHoliday ? (
+          <span
+            className="mt-0.5 h-2 w-2 shrink-0 rounded-full ring-2 ring-[var(--surface)]"
+            style={{
+              backgroundColor: isPassed ? "var(--muted)" : color,
+            }}
+            title="Holiday"
+          />
+        ) : null}
+      </div>
+      {hasHoliday ? (
+        <p
+          className={`mt-0.5 truncate text-[10px] font-semibold leading-tight ${
+            isPassed
+              ? "text-[var(--muted)] line-through decoration-[var(--muted)]/40"
+              : ""
+          }`}
+          style={isPassed ? undefined : { color }}
+        >
+          {primary.title}
+        </p>
+      ) : null}
+      {open && hasHoliday ? (
+        <HolidayHoverCard
+          holidays={cell.holidays}
+          dateFormat={dateFormat}
+          tipRef={tipRef}
+          coords={coords}
+        />
+      ) : null}
+    </button>
+  );
+}
+
 function MonthCalendar({
   year,
   month,
@@ -386,111 +576,15 @@ function MonthCalendar({
       <div className="grid grid-cols-7 gap-1 overflow-visible">
         {cells.map((cell, index) => {
           if (!cell) return <span key={`e-${index}`} className="min-h-14" />;
-          const hasHoliday = cell.holidays.length > 0;
-          const isToday = cell.key === todayKey;
-          const primary = cell.holidays[0];
-          const color = primary?.colorCode || "#7b39ec";
-          const days = hasHoliday ? daysUntil(primary.fromDate) : null;
-          const isPassed = days != null && days < 0;
-          const isUpcoming = days != null && days >= 0;
-          const isSelected = cell.key === selectedDateKey;
-
           return (
-            <button
-              type="button"
+            <CalendarDayButton
               key={cell.key}
-              onClick={() => onSelectDate?.(cell.key)}
-              className={`group relative min-h-12 rounded-xl border p-1.5 text-left transition ${
-                isSelected
-                  ? "border-[var(--violet)] bg-[var(--lavender-soft)]/60 ring-2 ring-[var(--violet)]/25"
-                  : hasHoliday
-                    ? isPassed
-                      ? "border-[var(--border)] bg-[var(--panel-soft)]/80 opacity-80"
-                      : "border-transparent"
-                    : isToday
-                      ? "border-[var(--violet)]/30 bg-[var(--lavender-soft)]/40"
-                      : "border-transparent bg-[var(--panel-soft)]/40"
-              }`}
-              style={
-                hasHoliday && !isPassed
-                  ? {
-                      backgroundColor: `${color}18`,
-                      boxShadow: `inset 0 0 0 1px ${color}55`,
-                    }
-                  : hasHoliday && isPassed
-                    ? { boxShadow: "inset 0 0 0 1px var(--border)" }
-                    : undefined
-              }
-            >
-              <div className="flex items-start justify-between gap-0.5">
-                <p
-                  className={`text-[11px] font-semibold tabular-nums ${
-                    isToday
-                      ? "text-[var(--violet)]"
-                      : hasHoliday && isUpcoming
-                        ? "text-[var(--text)]"
-                        : "text-[var(--muted)]"
-                  }`}
-                >
-                  {cell.day}
-                </p>
-                {hasHoliday ? (
-                  <span
-                    className="mt-0.5 h-2 w-2 shrink-0 rounded-full ring-2 ring-[var(--surface)]"
-                    style={{
-                      backgroundColor: isPassed ? "var(--muted)" : color,
-                    }}
-                    title="Holiday"
-                  />
-                ) : null}
-              </div>
-              {hasHoliday ? (
-                <p
-                  className={`mt-0.5 truncate text-[10px] font-semibold leading-tight ${
-                    isPassed ? "text-[var(--muted)] line-through decoration-[var(--muted)]/40" : ""
-                  }`}
-                  style={isPassed ? undefined : { color }}
-                >
-                  {primary.title}
-                </p>
-              ) : null}
-
-              {hasHoliday ? (
-                <div className="pointer-events-none absolute left-1/2 top-[calc(100%+6px)] z-30 hidden w-56 -translate-x-1/2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left shadow-[0_12px_32px_rgba(15,23,42,0.14)] group-hover:block">
-                  {cell.holidays.map((h, hi) => {
-                    const hDays = daysUntil(h.fromDate);
-                    const hPassed = hDays != null && hDays < 0;
-                    return (
-                      <div
-                        key={`${h.occurrenceId || h.holidayId || h.title}-${hi}`}
-                        className={hi > 0 ? "mt-2.5 border-t border-[var(--border)] pt-2.5" : ""}
-                      >
-                        <p className="text-[12px] font-semibold text-[var(--text)]">
-                          {h.title}
-                        </p>
-                        <p className="mt-1 text-[11px] text-[var(--muted)]">
-                          {holidayMetaLine(h, dateFormat)}
-                        </p>
-                        {h.description ? (
-                          <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
-                            {h.description}
-                          </p>
-                        ) : null}
-                        <p
-                          className={`mt-1.5 text-[10px] font-semibold ${
-                            hPassed
-                              ? "text-[var(--muted)]"
-                              : "text-[var(--violet)]"
-                          }`}
-                        >
-                          {formatCountdown(hDays) || "—"}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </button>
+              cell={cell}
+              todayKey={todayKey}
+              selectedDateKey={selectedDateKey}
+              dateFormat={dateFormat}
+              onSelectDate={onSelectDate}
+            />
           );
         })}
       </div>
@@ -525,7 +619,14 @@ export function HolidaysView({ dateFormat = "DD/MM/YYYY" }) {
   const { rows, total, loading, error, refetch } = useHolidays({ year });
 
   useEffect(() => {
-    setDraftYear(String(year));
+    let alive = true;
+    queueMicrotask(() => {
+      if (!alive) return;
+      setDraftYear(String(year));
+    });
+    return () => {
+      alive = false;
+    };
   }, [year]);
 
   const yearFilterOptions = useMemo(() => {

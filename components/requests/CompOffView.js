@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { FilterDrawerDateRange } from "@/components/ui/FilterDrawerDateRange";
+import { MuiDateField } from "@/components/ui/MuiDateField";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
@@ -683,18 +684,15 @@ export function CompOffView({
         wide
       >
         <form className="space-y-4 pb-8" onSubmit={handleSubmit}>
-          <label className="block text-[12px] font-medium text-[var(--muted)]">
-            Work date
-            <input
-              type="date"
-              required
-              className={fieldClass}
-              value={form.workDate}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, workDate: e.target.value }))
-              }
-            />
-          </label>
+          <MuiDateField
+            label="Work date"
+            required
+            dateFormat={dateFormat}
+            value={form.workDate}
+            onChange={(next) =>
+              setForm((prev) => ({ ...prev, workDate: next }))
+            }
+          />
 
           <label className="block text-[12px] font-medium text-[var(--muted)]">
             Hours worked

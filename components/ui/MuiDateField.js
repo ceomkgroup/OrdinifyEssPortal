@@ -8,6 +8,7 @@ import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 dayjs.extend(customParseFormat);
 
@@ -93,10 +94,13 @@ function DateFieldInner({
   clearable = false,
   required = false,
   disabled = false,
-  dateFormat = "DD/MM/YYYY",
+  dateFormat,
   className = "",
 }) {
-  const displayFormat = toPickerDateFormat(dateFormat);
+  const { settings } = useCompanySettings();
+  const displayFormat = toPickerDateFormat(
+    dateFormat || settings.dateFormat || "DD/MM/YYYY"
+  );
   const parsed = useMemo(() => parseApiDate(value), [value]);
   const minDate = useMemo(() => (min ? parseApiDate(min) : undefined), [min]);
   const maxDate = useMemo(() => (max ? parseApiDate(max) : undefined), [max]);
@@ -134,7 +138,7 @@ function DateFieldInner({
             size: "small",
           },
           popper: {
-            sx: { zIndex: 1400 },
+            sx: { zIndex: 2000 },
           },
         }}
       />
@@ -169,7 +173,8 @@ export function MuiDateRangeFields({
   fromLabel = "From",
   toLabel = "To",
   clearable = true,
-  dateFormat = "DD/MM/YYYY",
+  required = false,
+  dateFormat,
   className = "",
 }) {
   return withPickerProviders(
@@ -180,6 +185,7 @@ export function MuiDateRangeFields({
         onChange={onFromChange}
         max={to || undefined}
         clearable={clearable}
+        required={required}
         dateFormat={dateFormat}
       />
       <DateFieldInner
@@ -188,6 +194,7 @@ export function MuiDateRangeFields({
         onChange={onToChange}
         min={from || undefined}
         clearable={clearable}
+        required={required}
         dateFormat={dateFormat}
       />
     </div>

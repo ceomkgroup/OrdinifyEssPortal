@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FlashBanner } from "@/components/ui/FlashBanner";
 import { PageLoader } from "@/components/ui/Spinner";
+import { MuiDateField } from "@/components/ui/MuiDateField";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePortalProfile } from "@/hooks/usePortalProfile";
 import { formatDate, formatTime, getDisplayName } from "@/lib/format";
@@ -126,9 +127,22 @@ function Field({
   required = false,
   as = "input",
   options = [],
+  dateFormat = "DD/MM/YYYY",
 }) {
   const base =
     "w-full rounded-xl border border-[var(--border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:bg-[var(--surface)]";
+
+  if (type === "date") {
+    return (
+      <MuiDateField
+        label={label}
+        value={value}
+        onChange={onChange}
+        required={required}
+        dateFormat={dateFormat}
+      />
+    );
+  }
 
   return (
     <div>
@@ -621,6 +635,7 @@ export function ProfilePageView({ mode = "overview" }) {
               <Field
                 label="Date of Birth"
                 type="date"
+                dateFormat={dateFormat}
                 value={form.dateOfBirth}
                 onChange={(v) => setField("dateOfBirth", v)}
               />

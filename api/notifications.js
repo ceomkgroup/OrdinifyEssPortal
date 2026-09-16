@@ -229,6 +229,13 @@ export function getNotificationHref(row) {
     case "tax_certificate":
     case "tax-certificate":
       return "/payslip/tax-certificate";
+    case "kpi":
+    case "team_kpi":
+      return data.employeeId
+        ? `/team/kpi?employeeId=${encodeURIComponent(data.employeeId)}`
+        : data.periodId
+          ? `/kpi?periodId=${encodeURIComponent(data.periodId)}`
+          : "/kpi";
     default:
       return null;
   }
