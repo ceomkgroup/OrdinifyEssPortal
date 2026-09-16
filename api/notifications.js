@@ -137,9 +137,62 @@ export async function markNotificationRead(notificationId) {
 }
 
 /** Deep-link target from dataJson.type */
+const TEAM_INBOX_TABS = {
+  leave: "leave",
+  team_leave: "leave",
+  wfh: "wfh",
+  team_wfh: "wfh",
+  on_duty: "onDuty",
+  team_on_duty: "onDuty",
+  overtime: "overtime",
+  team_overtime: "overtime",
+  shift_change: "shiftChange",
+  team_shift_change: "shiftChange",
+  comp_off: "compOff",
+  team_comp_off: "compOff",
+  loan: "loan",
+  team_loan: "loan",
+  advance: "advance",
+  team_advance: "advance",
+  attendance_change: "attendanceChange",
+  team_attendance_change: "attendanceChange",
+  attendance_log: "attendanceLog",
+  team_attendance_log: "attendanceLog",
+  expense_claim: "expenseClaim",
+  team_expense_claim: "expenseClaim",
+  expense: "expenseClaim",
+};
+
+function teamInboxHref(type, data) {
+  const isTeam =
+    type.startsWith("team_") ||
+    String(data.relationship || "").toLowerCase() === "manager" ||
+    String(data.inbox || data.scope || "").toLowerCase() === "team";
+  if (!isTeam) return null;
+  const tab = TEAM_INBOX_TABS[type];
+  if (!tab) return "/team/requests";
+  const id =
+    data.requestId ||
+    data.wfhId ||
+    data.otRequestId ||
+    data.onDutyId ||
+    data.advanceId ||
+    data.loanId ||
+    data.compOffId ||
+    data.expenseClaimId ||
+    data.logId ||
+    data.id ||
+    "";
+  const qs = new URLSearchParams({ type: tab });
+  if (id) qs.set("id", String(id));
+  return `/team/requests?${qs.toString()}`;
+}
+
 export function getNotificationHref(row) {
   const type = String(row?.type || row?.dataJson?.type || "").toLowerCase();
   const data = row?.dataJson || {};
+  const teamHref = teamInboxHref(type, data);
+  if (teamHref) return teamHref;
 
   switch (type) {
     case "attendance_change":

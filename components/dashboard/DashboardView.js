@@ -19,11 +19,13 @@ import { useDashboard } from "@/hooks/useDashboard";
 import { useAttendanceLive } from "@/hooks/useAttendance";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useModules } from "@/components/modules/ModulesProvider";
+import { useTeamOptional } from "@/components/team/TeamCapabilitiesProvider";
 import { greetingByHour } from "@/lib/format";
 
 export function DashboardView() {
   const { logout, employee: authEmployee } = useAuth();
   const { canShowWidget } = useModules();
+  const team = useTeamOptional();
   const { data, loading, error, refetch } = useDashboard();
   const {
     today: liveToday,
@@ -68,7 +70,7 @@ export function DashboardView() {
   const showWeekly = canShowWidget("weeklyHours");
   const showPending = canShowWidget("pendingRequests");
   const showHolidays = canShowWidget("upcomingHolidays");
-  const showTeam = canShowWidget("teamMembers");
+  const showTeam = canShowWidget("teamMembers") && Boolean(team?.canShowTeam);
   const showPayslip = canShowWidget("lastPayslip") && Boolean(data.lastPayslip);
   const showSettings = canShowWidget("companySettings");
   const showPunch = canShowWidget("punchWidget");

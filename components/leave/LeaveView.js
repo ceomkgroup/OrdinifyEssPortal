@@ -26,8 +26,6 @@ import {
   usePortalQuery,
 } from "@/hooks/usePortalQuery";
 import { MetaBadge } from "@/components/ui/MetaBadge";
-import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
-import { SoftStat, SUMMARY_GRID_CLASS } from "@/components/ui/SoftStat";
 import { PortalPage } from "@/components/ui/PortalPage";
 import { PageLoader } from "@/components/ui/Spinner";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -298,7 +296,6 @@ export function LeaveView({ section = "logs" }) {
     setLimit,
     requests,
     meta,
-    requestStats,
     requestsLoading,
     encashmentEnabled,
     encashStatus,
@@ -309,7 +306,6 @@ export function LeaveView({ section = "logs" }) {
     setEncashLimit,
     encashRows,
     encashMeta,
-    encashStats,
     encashDisabled,
     encashMessage,
     encashLoading,
@@ -525,19 +521,6 @@ export function LeaveView({ section = "logs" }) {
     (leaveTypeFilter !== "all" ? 1 : 0) + leaveDateFilterCount;
   const encashListFilterCount =
     (encashTypeFilter !== "all" ? 1 : 0) + encashDateFilterCount;
-
-  const totals = useMemo(() => {
-    return balances.reduce(
-      (acc, row) => {
-        acc.remaining += Number(row.remaining) || 0;
-        acc.used += Number(row.used) || 0;
-        acc.pending += Number(row.pending) || 0;
-        acc.allocated += Number(row.allocated) || 0;
-        return acc;
-      },
-      { remaining: 0, used: 0, pending: 0, allocated: 0 }
-    );
-  }, [balances]);
 
   const estimatedDays = useMemo(
     () =>
@@ -1225,76 +1208,6 @@ export function LeaveView({ section = "logs" }) {
         </>
       }
     >
-
-      <CollapsibleSection title="Summary">
-        <div className={SUMMARY_GRID_CLASS}>
-          {isBalance ? (
-            <>
-              <SoftStat
-                label="Allocated"
-                value={num(totals.allocated)}
-                color="#64748b"
-              />
-              <SoftStat
-                label="Remaining"
-                value={num(totals.remaining)}
-                color="#22c55e"
-              />
-              <SoftStat label="Used" value={num(totals.used)} color="#7b39ec" />
-              <SoftStat
-                label="Pending"
-                value={num(totals.pending)}
-                color="#f59e0b"
-              />
-            </>
-          ) : isEncashment ? (
-            <>
-              <SoftStat
-                label="Total Requests"
-                value={encashStats.total}
-              />
-              <SoftStat
-                label="Pending"
-                value={encashStats.pending}
-                color="#7b39ec"
-              />
-              <SoftStat
-                label="Approved"
-                value={encashStats.approved}
-                color="#22c55e"
-              />
-              <SoftStat
-                label="Cancelled"
-                value={encashStats.cancelled}
-                color="#ef4444"
-              />
-            </>
-          ) : (
-            <>
-              <SoftStat
-                label="Total Requests"
-                value={requestStats.total}
-              />
-              <SoftStat
-                label="Pending"
-                value={requestStats.pending}
-                color="#7b39ec"
-              />
-              <SoftStat
-                label="Approved"
-                value={requestStats.approved}
-                color="#22c55e"
-              />
-              <SoftStat
-                label="Cancelled"
-                value={requestStats.cancelled}
-                color="#ef4444"
-              />
-            </>
-          )}
-        </div>
-      </CollapsibleSection>
-
       {error ? (
         <FlashBanner
           message={error}

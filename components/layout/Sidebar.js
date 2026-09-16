@@ -29,6 +29,8 @@ import { PAYSLIP_NAV } from "@/lib/payslip-nav";
 import { PROFILE_NAV } from "@/lib/profile-nav";
 import { REQUEST_TYPES } from "@/lib/request-types";
 import { SETTINGS_NAV } from "@/lib/settings-nav";
+import { TEAM_NAV } from "@/lib/team-nav";
+import { useTeamOptional } from "@/components/team/TeamCapabilitiesProvider";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -70,7 +72,12 @@ const NAV = [
     icon: Receipt,
     childrenKey: "payslip",
   },
-  { href: "/team", label: "Team", icon: Users },
+  {
+    href: "/team",
+    label: "Team",
+    icon: Users,
+    childrenKey: "team",
+  },
   { href: "/holidays", label: "Holidays", icon: CalendarDays },
   { href: "/announcements", label: "Announcements", icon: Megaphone },
   { href: "/reports", label: "Reports", icon: BarChart3 },
@@ -133,7 +140,8 @@ function NavSection({
 }
 
 function ChildLink({ href, label, icon: ChildIcon, pathname, onClose, collapsed }) {
-  const exactOnly = href === "/profile" || href === "/requests";
+  const exactOnly =
+    href === "/profile" || href === "/requests" || href === "/team";
   const payslipList = href === "/payslip";
   const active = payslipList
     ? pathname === "/payslip" ||
@@ -173,12 +181,16 @@ export function Sidebar({ open, onClose, collapsed }) {
     canShowPayslipTile,
     loading,
   } = useModules();
+  const team = useTeamOptional();
+  const canShowTeam = Boolean(team?.canShowTeam);
+  const teamLoading = Boolean(team?.loading);
   const [profileOpen, setProfileOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
   const [payslipOpen, setPayslipOpen] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const leaveChildren = useMemo(
@@ -225,6 +237,16 @@ export function Sidebar({ open, onClose, collapsed }) {
     [canShowAssetTile]
   );
 
+  const teamChildren = useMemo(
+    () =>
+      TEAM_NAV.map((item) => ({
+        href: item.href,
+        label: item.title,
+        icon: item.icon,
+      })),
+    []
+  );
+
   const payslipChildren = useMemo(
     () =>
       PAYSLIP_NAV.filter((item) => canShowPayslipTile(item.key)).map((item) => ({
@@ -262,8 +284,9 @@ export function Sidebar({ open, onClose, collapsed }) {
       if (pathname?.startsWith("/requests")) setRequestsOpen(true);
       if (pathname?.startsWith("/documents")) setDocumentsOpen(true);
       if (pathname?.startsWith("/assets")) setAssetsOpen(true);
-      if (pathname?.startsWith("/payslip")) setPayslipOpen(true);
-      if (pathname?.startsWith("/settings")) setSettingsOpen(true);
+    if (pathname?.startsWith("/payslip")) setPayslipOpen(true);
+    if (pathname?.startsWith("/team")) setTeamOpen(true);
+    if (pathname?.startsWith("/settings")) setSettingsOpen(true);
     });
   }, [pathname]);
 
@@ -285,6 +308,10 @@ export function Sidebar({ open, onClose, collapsed }) {
     }
     if (item.childrenKey === "payslip") {
       return payslipChildren.length > 0 || canAccessRoute("/payslip");
+    }
+    if (item.childrenKey === "team") {
+      if (teamLoading) return false;
+      return canShowTeam;
     }
     if (item.childrenKey === "profile") {
       return true;
@@ -488,6 +515,35 @@ export function Sidebar({ open, onClose, collapsed }) {
                   maxHeightClass="max-h-[200px]"
                 >
                   {payslipChildren.map((child) => (
+                    <ChildLink
+                      key={child.href}
+                      href={child.href}
+                      label={child.label}
+                      icon={child.icon}
+                      pathname={pathname}
+                      onClose={onClose}
+                      collapsed={collapsed}
+                    />
+                  ))}
+                </NavSection>
+              );
+            }
+
+            if (childrenKey === "team") {
+              return (
+                <NavSection
+                  key={href}
+                  href={href}
+                  label={label}
+                  Icon={Icon}
+                  open={teamOpen}
+                  setOpen={setTeamOpen}
+                  sectionActive={pathname?.startsWith("/team")}
+                  collapsed={collapsed}
+                  onClose={onClose}
+                  maxHeightClass="max-h-[280px]"
+                >
+                  {teamChildren.map((child) => (
                     <ChildLink
                       key={child.href}
                       href={child.href}
