@@ -37,6 +37,7 @@ import {
 } from "@/hooks/usePortalQuery";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { formatDate, formatDateTime, rowSerial } from "@/lib/format";
+import { resolveMediaUrl } from "@/lib/media";
 import {
   countActiveDateFilters,
   dateInRange,
@@ -62,9 +63,10 @@ function statusTone(status) {
 }
 
 async function triggerBrowserDownload(url, fileName) {
-  if (!url) return;
+  const resolved = resolveMediaUrl(url) || url;
+  if (!resolved) return;
   try {
-    const res = await fetch(url);
+    const res = await fetch(resolved);
     const blob = await res.blob();
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -75,7 +77,7 @@ async function triggerBrowserDownload(url, fileName) {
     a.remove();
     URL.revokeObjectURL(objectUrl);
   } catch {
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.open(resolved, "_blank", "noopener,noreferrer");
   }
 }
 
@@ -477,7 +479,7 @@ export function CompanyDocumentsView({
     );
   }
 
-  const previewUrl = selected?.currentVersion?.fileUrl || null;
+  const previewUrl = resolveMediaUrl(selected?.currentVersion?.fileUrl) || null;
 
   return (
     <PortalPage

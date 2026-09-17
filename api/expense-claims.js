@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { toMediaKey } from "@/lib/media";
 
 function unwrap(data, fallbackMessage) {
   if (!data?.success) {
@@ -191,10 +192,10 @@ export async function createExpenseClaim(payload = {}) {
         if (item.receipt instanceof File) {
           form.append(`items[${index}][receipt]`, item.receipt);
         } else if (item.receiptUrl) {
-          form.append(
-            `items[${index}][receiptUrl]`,
-            String(item.receiptUrl)
-          );
+          const receiptKey = toMediaKey(item.receiptUrl);
+          if (receiptKey) {
+            form.append(`items[${index}][receiptUrl]`, receiptKey);
+          }
         }
       });
       const { data } = await api.post(
@@ -215,7 +216,8 @@ export async function createExpenseClaim(payload = {}) {
         expenseDate: String(item.expenseDate),
       };
       if (item.description) next.description = String(item.description).trim();
-      if (item.receiptUrl) next.receiptUrl = String(item.receiptUrl).trim();
+      const receiptKey = toMediaKey(item.receiptUrl);
+      if (receiptKey) next.receiptUrl = receiptKey;
       return next;
     });
 

@@ -204,6 +204,69 @@ function SectionTitle({ icon: Icon, title, hint }) {
   );
 }
 
+function ProfilePhotoPicker({
+  profile,
+  displayName,
+  photoSaving,
+  fileRef,
+  onPhotoSelected,
+  showName = false,
+  compact = false,
+}) {
+  return (
+    <div className={compact ? "" : "flex flex-wrap items-center gap-4"}>
+      <div className="relative isolate w-fit shrink-0">
+        <Avatar
+          person={profile}
+          name={displayName}
+          size={96}
+          className="pointer-events-none ring-4 ring-[var(--lavender-soft)]"
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={photoSaving}
+          className="absolute -bottom-0.5 -right-0.5 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--violet)] shadow-md transition hover:bg-[var(--lavender-soft)] disabled:opacity-60"
+          aria-label="Change profile photo"
+        >
+          <Camera className="h-4 w-4" />
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={onPhotoSelected}
+        />
+      </div>
+      {compact ? null : (
+        <div className="min-w-0">
+          {showName ? (
+            <p className="text-[14px] font-semibold text-[var(--text)]">
+              {displayName || "Employee"}
+            </p>
+          ) : (
+            <p className="text-[13px] font-semibold text-[var(--text)]">
+              Profile photo
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={photoSaving}
+            className="mt-1 text-[12px] font-semibold text-[var(--violet)] hover:underline disabled:opacity-60"
+          >
+            {photoSaving ? "Uploading…" : "Change photo"}
+          </button>
+          <p className="mt-1 text-[11px] text-[var(--muted)]">
+            JPG or PNG, under 5MB
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ProfilePageView({ mode = "overview" }) {
   const router = useRouter();
   const { employee: authEmployee, mergeLocalEmployee } = useAuth();
@@ -416,27 +479,13 @@ export function ProfilePageView({ mode = "overview" }) {
       <Card bodyClassName="space-y-5">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           <div className="relative w-fit shrink-0">
-            <Avatar
-              person={profile}
-              name={displayName}
-              size={96}
-              className="ring-4 ring-[var(--lavender-soft)]"
-            />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={photoSaving}
-              className="absolute bottom-0 right-0 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--violet)] shadow-sm transition hover:bg-[var(--lavender-soft)] disabled:opacity-60"
-              aria-label="Change profile photo"
-            >
-              <Camera className="h-3.5 w-3.5" />
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={onPhotoSelected}
+            <ProfilePhotoPicker
+              profile={profile}
+              displayName={displayName}
+              photoSaving={photoSaving}
+              fileRef={fileRef}
+              onPhotoSelected={onPhotoSelected}
+              compact
             />
           </div>
 
@@ -486,7 +535,7 @@ export function ProfilePageView({ mode = "overview" }) {
               disabled={photoSaving}
               className="mt-3 text-[12px] font-semibold text-[var(--violet)] hover:underline disabled:opacity-60"
             >
-              {photoSaving ? "Uploading..." : "Change photo"}
+              {photoSaving ? "Uploading…" : "Change photo"}
             </button>
           </div>
         </div>
@@ -608,6 +657,22 @@ export function ProfilePageView({ mode = "overview" }) {
 
       {isEdit ? (
         <form onSubmit={onSaveProfile} className="grid gap-5">
+          <Card>
+            <SectionTitle
+              icon={Camera}
+              title="Profile photo"
+              hint="Upload a new picture — saved immediately"
+            />
+            <ProfilePhotoPicker
+              profile={profile}
+              displayName={displayName}
+              photoSaving={photoSaving}
+              fileRef={fileRef}
+              onPhotoSelected={onPhotoSelected}
+              showName
+            />
+          </Card>
+
           <Card>
             <SectionTitle
               icon={UserRound}

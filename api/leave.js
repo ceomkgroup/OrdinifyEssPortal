@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { toMediaKey } from "@/lib/media";
 
 function unwrap(data, fallbackMessage) {
   if (!data?.success) {
@@ -197,9 +198,15 @@ export async function listLeaveRequests({
  */
 export async function createLeaveRequest(payload) {
   try {
+    const body = { ...(payload || {}) };
+    if (body.attachmentUrl) {
+      const key = toMediaKey(body.attachmentUrl);
+      if (key) body.attachmentUrl = key;
+      else delete body.attachmentUrl;
+    }
     const { data } = await api.post(
       "/api/employee/portal/leave/requests",
-      payload
+      body
     );
     clearLeaveSoftCache("requests");
     clearLeaveSoftCache("balance");

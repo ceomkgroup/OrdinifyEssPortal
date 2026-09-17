@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { toStorageKey } from "@/lib/media";
 
 /**
  * Known FormType values for POST /api/employee/portal/upload
@@ -36,8 +37,9 @@ function toApiError(err, fallbackMessage) {
 
 function normalizeUploadItem(item) {
   if (!item || typeof item !== "object") return null;
+  const key = toStorageKey(item.key) || toStorageKey(item.url) || null;
   return {
-    key: item.key || null,
+    key,
     url: item.url || null,
     originalName: item.originalName || item.name || null,
     mimeType: item.mimeType || item.type || null,
@@ -55,7 +57,7 @@ function normalizeUploadItem(item) {
  * - Recno (optional) — employee id; defaults to self on server
  *
  * Returns { key, url, originalName, mimeType, sizeBytes }
- * Save `key` as photoUrl / attachmentUrl on other APIs.
+ * Persist `key` only (never the public R2 URL) as photoUrl / attachmentUrl.
  */
 export async function uploadPortalFiles({
   files,

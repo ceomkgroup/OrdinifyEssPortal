@@ -1,5 +1,6 @@
 import api from "@/lib/axios";
 import { uploadEmployeePhoto } from "@/api/upload";
+import { toStorageKey } from "@/lib/media";
 import { clearAttendancePolicyApiCache } from "@/api/attendance-policy";
 import { clearAttendanceTypesCache, clearLeaveTypesCache } from "@/api/dropdowns";
 
@@ -101,7 +102,15 @@ export async function getPortalProfile() {
 
 /** PATCH only allowed self-service fields */
 export async function updatePortalProfile(payload) {
-  const { data } = await api.patch("/api/employee/portal/profile", payload);
+  const body = { ...(payload || {}) };
+  if (body.photoUrl != null && body.photoUrl !== "") {
+    const key = toStorageKey(body.photoUrl);
+    if (!key) {
+      throw new Error("Profile photo must be a storage key, not a public URL.");
+    }
+    body.photoUrl = key;
+  }
+  const { data } = await api.patch("/api/employee/portal/profile", body);
   if (!data?.success) {
     throw new Error(data?.message || "Failed to update profile");
   }
@@ -112,10 +121,11 @@ export async function updatePortalProfile(payload) {
  * Profile photo via generic upload, then save key on profile.
  * 1) POST /api/employee/portal/upload (FormType=employee_photo)
  * 2) PATCH /api/employee/portal/profile { photoUrl: key }
+ * Never send the public R2 / CDN URL to the API.
  */
 export async function uploadPortalProfilePhoto(file, employeeId) {
   const uploaded = await uploadEmployeePhoto(file, employeeId);
-  const photoKey = uploaded?.key;
+  const photoKey = toStorageKey(uploaded?.key) || toStorageKey(uploaded?.url);
   if (!photoKey) {
     throw new Error("Upload succeeded but no file key was returned.");
   }
@@ -130,7 +140,7 @@ export async function uploadPortalProfilePhoto(file, employeeId) {
   const profile = data.data || data;
   return {
     ...(typeof profile === "object" ? profile : {}),
-    photoUrl: profile?.photoUrl || photoKey,
+    photoUrl: toStorageKey(profile?.photoUrl) || photoKey,
     photoUpload: uploaded,
   };
 }

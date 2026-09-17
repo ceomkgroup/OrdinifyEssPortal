@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 import { getDisplayName, getInitials } from "@/lib/format";
 import { getPersonPhoto, resolveMediaUrl } from "@/lib/media";
@@ -8,17 +11,19 @@ export function Avatar({ name, src, person, size = 40, className = "" }) {
   const url = resolveMediaUrl(photo);
   const dim = `${size}px`;
   const initials = getInitials(displayName);
+  const [broken, setBroken] = useState(false);
 
-  if (url) {
+  if (url && !broken) {
     return (
       <Image
         src={url}
         alt={displayName || "avatar"}
         width={size}
         height={size}
-        className={`rounded-full object-cover ${className}`}
+        className={`relative z-0 rounded-full object-cover ${className}`}
         style={{ width: dim, height: dim }}
         unoptimized
+        onError={() => setBroken(true)}
       />
     );
   }

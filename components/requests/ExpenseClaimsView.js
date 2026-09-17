@@ -49,6 +49,7 @@ import {
   formatDateTime,
   rowSerial,
 } from "@/lib/format";
+import { resolveMediaUrl } from "@/lib/media";
 import { useModules } from "@/components/modules/ModulesProvider";
 import { ComingSoon } from "@/components/ui/ComingSoon";
 import { PageLoader } from "@/components/ui/Spinner";
@@ -126,9 +127,10 @@ function receiptFileName(url, fallback = "receipt") {
 }
 
 async function triggerBrowserDownload(url, fileName) {
-  if (!url) return;
+  const resolved = resolveMediaUrl(url) || url;
+  if (!resolved) return;
   try {
-    const res = await fetch(url);
+    const res = await fetch(resolved);
     const blob = await res.blob();
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -139,7 +141,7 @@ async function triggerBrowserDownload(url, fileName) {
     a.remove();
     URL.revokeObjectURL(objectUrl);
   } catch {
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.open(resolved, "_blank", "noopener,noreferrer");
   }
 }
 
@@ -385,7 +387,7 @@ function ClaimItems({ items, currency, dateFormat }) {
   return (
     <div className="space-y-2.5">
       {items.map((item, index) => {
-        const url = item.receiptUrl || item.fileUrl || null;
+        const url = resolveMediaUrl(item.receiptUrl || item.fileUrl || null);
         const name =
           item.fileName ||
           item.receiptName ||

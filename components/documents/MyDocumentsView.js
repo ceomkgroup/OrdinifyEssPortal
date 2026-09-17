@@ -43,6 +43,7 @@ import {
 } from "@/hooks/usePortalQuery";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { formatDate, formatDateTime, rowSerial } from "@/lib/format";
+import { resolveMediaUrl } from "@/lib/media";
 import {
   countActiveDateFilters,
   dateInRange,
@@ -334,7 +335,7 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
         cell: (row) =>
           row.fileUrl ? (
             <a
-              href={row.fileUrl}
+              href={resolveMediaUrl(row.fileUrl)}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[12px] font-semibold text-[var(--violet)] underline-offset-2 hover:underline"
@@ -892,7 +893,7 @@ export function MyDocumentsView({ dateFormat = "DD/MM/YYYY", timeFormat = "12h" 
                     className="h-9 rounded-xl"
                     onClick={() =>
                       window.open(
-                        selected.fileUrl,
+                        resolveMediaUrl(selected.fileUrl),
                         "_blank",
                         "noopener,noreferrer"
                       )
