@@ -32,6 +32,62 @@ function pickNumber(...values) {
   return null;
 }
 
+const CORRECTION_WINDOW_KEYS = [
+  "correctionWindowDays",
+  "attendanceChangeWindowDays",
+  "attendanceChangeDays",
+  "changeWindowDays",
+  "correctionDays",
+  "attendanceCorrectionWindowDays",
+  "maxCorrectionDays",
+  "backdatedDays",
+  "backDateLimitDays",
+  "allowedPastDays",
+  "requestWindowDays",
+  "changeRequestWindowDays",
+  "attendanceChangeRequestDays",
+];
+
+/**
+ * How many past days an attendance change may cover.
+ * Reads known policy/settings keys (including nested objects) so a later
+ * backend rename still applies if one of these names is used.
+ * Returns null when the company has not configured a window.
+ */
+export function pickCorrectionWindowDays(...sources) {
+  for (const source of sources) {
+    const n = readCorrectionWindowDays(source);
+    if (n != null) return n;
+  }
+  return null;
+}
+
+function readCorrectionWindowDays(source, depth = 0) {
+  if (source == null || depth > 4) return null;
+  if (typeof source === "number") {
+    return Number.isFinite(source) && source >= 0 ? source : null;
+  }
+  if (typeof source !== "object") return null;
+
+  for (const key of CORRECTION_WINDOW_KEYS) {
+    if (source[key] == null || source[key] === "") continue;
+    const n = Number(source[key]);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+
+  for (const key of [
+    "attendanceChange",
+    "attendanceCorrection",
+    "correction",
+    "changeRequest",
+    "policy",
+  ]) {
+    const nested = readCorrectionWindowDays(source[key], depth + 1);
+    if (nested != null) return nested;
+  }
+  return null;
+}
+
 /**
  * Normalize merged attendance policy from
  * GET /api/employee/portal/attendance-policy
@@ -61,6 +117,7 @@ export function normalizeAttendancePolicy(raw = {}) {
       markWeekend: Boolean(raw.weekendPolicy?.markWeekend ?? true),
     },
     autoCheckoutTime: raw.autoCheckoutTime || null,
+    correctionWindowDays: pickCorrectionWindowDays(raw),
     sources: {
       company: Boolean(sources.company),
       department: Boolean(sources.department),

@@ -16,6 +16,7 @@ import { MuiDateRangeFields } from "@/components/ui/MuiDateField";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useRoster } from "@/hooks/useRoster";
+import { useHolidaysRange } from "@/hooks/useHolidays";
 import { formatTime, getDisplayName } from "@/lib/format";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -132,16 +133,33 @@ function shortDate(ymd) {
   return `${day} ${mon} ${d.getFullYear()}`;
 }
 
+function holidayTitle(row) {
+  return row?.holidayTitle || row?.shiftName || "Holiday";
+}
+
 function ShiftPill({ row }) {
   if (!row) return null;
 
-  if (row.isHoliday || row.isOff) {
+  if (row.isHoliday) {
+    return (
+      <div className="mt-1.5 w-full rounded-lg border border-[var(--info)]/25 bg-[var(--info-soft)] px-2 py-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--info)]" />
+          <span className="truncate text-[11px] font-semibold text-[var(--info)]">
+            {holidayTitle(row)}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (row.isOff) {
     return (
       <div className="mt-1.5 w-full rounded-lg border border-[var(--violet)]/15 bg-[var(--lavender-soft)] px-2 py-1.5">
         <div className="flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--lavender)]" />
           <span className="truncate text-[11px] font-semibold text-[var(--violet)]">
-            {row.isHoliday ? "Holiday" : "Rest Day"}
+            Rest Day
           </span>
         </div>
       </div>
@@ -200,6 +218,7 @@ export function RosterView() {
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
 
   const { rows, loading, error } = useRoster({ from, to });
+  const { rows: holidayRows } = useHolidaysRange({ from, to });
   const { employee: authEmployee } = useAuth();
   const { settings } = useCompanySettings();
 
@@ -225,9 +244,44 @@ export function RosterView() {
     [viewYear, viewMonth]
   );
 
-  const todayKey = formatYmd(now);
+  const holidaysByDate = useMemo(() => {
+    const map = new Map();
+    for (const row of holidayRows) {
+      const start = row.fromDate;
+      const end = row.toDate && row.toDate >= start ? row.toDate : start;
+      if (!start) continue;
+      let cur = start;
+      for (let i = 0; i < 400 && cur <= end; i += 1) {
+        if (!map.has(cur)) map.set(cur, []);
+        map.get(cur).push(row);
+        const d = parseYmd(cur);
+        d.setDate(d.getDate() + 1);
+        cur = formatYmd(d);
+      }
+    }
+    return map;
+  }, [holidayRows]);
 
-  const selectedRow = selectedDate ? byDate.get(selectedDate) || null : null;
+  function resolveDay(date) {
+    const roster = byDate.get(date) || null;
+    const holidays = holidaysByDate.get(date);
+    if (holidays?.length) {
+      const primary = holidays[0];
+      return {
+        ...(roster || { date, isOff: true }),
+        date,
+        isHoliday: true,
+        isOff: true,
+        dayKind: "holiday",
+        holidayTitle: primary.title || "Holiday",
+        shiftName: primary.title || roster?.shiftName || "Holiday",
+      };
+    }
+    return roster;
+  }
+
+  const todayKey = formatYmd(now);
+  const selectedRow = selectedDate ? resolveDay(selectedDate) : null;
 
   const stats = useMemo(() => {
     let assigned = 0;
@@ -237,13 +291,23 @@ export function RosterView() {
     const covered = new Set();
 
     for (const row of rows) {
+      if (!row.date || row.date < from || row.date > to) continue;
       covered.add(row.date);
-      if (row.dayKind === "holiday") holidays += 1;
-      else if (row.dayKind === "weekOff") leave += 1;
-      else {
+      if (holidaysByDate.has(row.date) || row.dayKind === "holiday") {
+        holidays += 1;
+      } else if (row.dayKind === "weekOff") {
+        leave += 1;
+      } else {
         assigned += 1;
         totalHours += hoursBetween(row.startTime, row.endTime);
       }
+    }
+
+    for (const date of holidaysByDate.keys()) {
+      if (date < from || date > to) continue;
+      if (covered.has(date)) continue;
+      covered.add(date);
+      holidays += 1;
     }
 
     const periodDays = daysInRange(from, to);
@@ -254,7 +318,7 @@ export function RosterView() {
       holidays,
       noShift: Math.max(0, periodDays - covered.size),
     };
-  }, [rows, from, to]);
+  }, [rows, from, to, holidaysByDate]);
 
   // Auto-select a day when range/data changes
   useEffect(() => {
@@ -262,19 +326,26 @@ export function RosterView() {
       selectedDate &&
       selectedDate >= from &&
       selectedDate <= to &&
-      byDate.has(selectedDate)
+      (byDate.has(selectedDate) || holidaysByDate.has(selectedDate))
     ) {
       return;
     }
 
-    if (todayKey >= from && todayKey <= to && byDate.has(todayKey)) {
+    if (
+      todayKey >= from &&
+      todayKey <= to &&
+      (byDate.has(todayKey) || holidaysByDate.has(todayKey))
+    ) {
       setSelectedDate(todayKey);
       return;
     }
 
+    const firstHoliday = [...holidaysByDate.keys()].find(
+      (date) => date >= from && date <= to
+    );
     const first = rows.find((r) => r.dayKind === "working") || rows[0];
-    setSelectedDate(first?.date || null);
-  }, [from, to, rows, byDate, selectedDate, todayKey]);
+    setSelectedDate(first?.date || firstHoliday || null);
+  }, [from, to, rows, byDate, holidaysByDate, selectedDate, todayKey]);
 
   function applyPeriod() {
     let nextFrom = fromDraft;
@@ -295,29 +366,25 @@ export function RosterView() {
     setSelectedDate(null);
   }
 
-  function goPrevMonth() {
-    const d = new Date(viewYear, viewMonth - 2, 1);
-    setViewYear(d.getFullYear());
-    setViewMonth(d.getMonth() + 1);
-  }
-
-  function goNextMonth() {
-    const d = new Date(viewYear, viewMonth, 1);
-    setViewYear(d.getFullYear());
-    setViewMonth(d.getMonth() + 1);
-  }
-
-  function goToday() {
-    const y = now.getFullYear();
-    const m = now.getMonth() + 1;
-    const bounds = monthBounds(y, m);
-    setViewYear(y);
-    setViewMonth(m);
+  function applyMonth(year, month, selectToday = false) {
+    const bounds = monthBounds(year, month);
+    setViewYear(year);
+    setViewMonth(month);
     setFromDraft(bounds.from);
     setToDraft(bounds.to);
     setFrom(bounds.from);
     setTo(bounds.to);
-    setSelectedDate(todayKey);
+    setSelectedDate(selectToday ? todayKey : null);
+  }
+
+  function goPrevMonth() {
+    const d = new Date(viewYear, viewMonth - 2, 1);
+    applyMonth(d.getFullYear(), d.getMonth() + 1);
+  }
+
+  function goNextMonth() {
+    const d = new Date(viewYear, viewMonth, 1);
+    applyMonth(d.getFullYear(), d.getMonth() + 1);
   }
 
   if (loading && rows.length === 0) {
@@ -343,7 +410,11 @@ export function RosterView() {
           </span>
           <span className="inline-flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-[var(--lavender)]" />
-            Rest Day / Holiday
+            Rest Day
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--info)]" />
+            Holiday
           </span>
           <span className="inline-flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-[#c4c4c4]" />
@@ -381,6 +452,7 @@ export function RosterView() {
                 fromLabel="From"
                 toLabel="To"
                 clearable={false}
+                linked={false}
                 dateFormat={settings.dateFormat || "DD/MM/YYYY"}
               />
             </div>
@@ -411,13 +483,9 @@ export function RosterView() {
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <button
-                type="button"
-                onClick={goToday}
-                className="h-9 px-3 text-[13px] font-semibold hover:bg-[var(--panel-soft)]"
-              >
-                Today
-              </button>
+              <span className="inline-flex h-9 min-w-[7.25rem] items-center justify-center px-3 text-[13px] font-semibold text-[var(--text)]">
+                {MONTH_NAMES[viewMonth - 1]}
+              </span>
               <button
                 type="button"
                 aria-label="Next month"
@@ -453,7 +521,7 @@ export function RosterView() {
                 {cells.map((cell) => {
                   const inFilter = cell.date >= from && cell.date <= to;
                   const row =
-                    cell.inMonth && inFilter ? byDate.get(cell.date) : null;
+                    cell.inMonth && inFilter ? resolveDay(cell.date) : null;
                   const isToday = cell.date === todayKey;
                   const isSelected =
                     cell.inMonth && inFilter && cell.date === selectedDate;
@@ -516,16 +584,28 @@ export function RosterView() {
               </p>
             ) : (
               <div className="mt-3 space-y-3">
-                {selectedRow.isOff || selectedRow.isHoliday ? (
+                {selectedRow.isHoliday ? (
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--info)]/25 bg-[var(--info-soft)] px-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--info)]" />
+                      <span className="truncate text-[14px] font-bold text-[var(--info)]">
+                        {holidayTitle(selectedRow)}
+                      </span>
+                    </div>
+                    <span className="shrink-0 rounded-md bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--info)] ring-1 ring-[var(--info)]/20">
+                      Holiday
+                    </span>
+                  </div>
+                ) : selectedRow.isOff ? (
                   <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--violet)]/15 bg-[var(--lavender-soft)] px-3 py-2.5">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--lavender)]" />
                       <span className="truncate text-[14px] font-bold text-[var(--violet)]">
-                        {selectedRow.isHoliday ? "Holiday" : "Rest Day"}
+                        Rest Day
                       </span>
                     </div>
                     <span className="shrink-0 rounded-md bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--violet)] ring-1 ring-[var(--border)]">
-                      {selectedRow.isHoliday ? "Holiday" : "Off"}
+                      Off
                     </span>
                   </div>
                 ) : (
@@ -624,8 +704,8 @@ export function RosterView() {
                 icon={Umbrella}
                 label="Holidays"
                 value={String(stats.holidays)}
-                soft="bg-[var(--lavender-soft)]"
-                tone="text-[var(--violet)]"
+                soft="bg-[var(--info-soft)]"
+                tone="text-[var(--info)]"
               />
               <SummaryRow
                 icon={CalendarDays}

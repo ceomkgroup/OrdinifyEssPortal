@@ -26,7 +26,11 @@ import { PortalPage } from "@/components/ui/PortalPage";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { PageLoader } from "@/components/ui/Spinner";
 import { TablePanel } from "@/components/ui/TablePanel";
-import { getAttendanceHistory } from "@/api/attendance";
+import {
+  getAttendanceHistory,
+  getAttendanceHistoryAll,
+  resolveAttendanceLogId,
+} from "@/api/attendance";
 import {
   cancelAttendanceChange,
   submitAttendanceChange,
@@ -38,11 +42,13 @@ import {
   dateInRange,
 } from "@/lib/request-date-filter";
 import { useRequestListQuery } from "@/hooks/useRequestListQuery";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { useAttendancePolicy } from "@/hooks/useAttendancePolicy";
+import { pickCorrectionWindowDays } from "@/api/attendance-policy";
 import { formatDate, formatDateTime, formatTime, rowSerial } from "@/lib/format";
 
 const fieldClass =
   "mt-1.5 h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--violet)] focus:ring-2 focus:ring-[var(--lavender-soft)]";
-
 
 function statusTone(status) {
   const s = String(status || "").toLowerCase();
@@ -158,25 +164,25 @@ function RequestRowActions({ requestId, onView }) {
 
       {open && typeof document !== "undefined"
         ? createPortal(
-            <div
-              data-request-menu={requestId}
-              className="fixed z-[9999] w-44 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
-              style={{ top: coords.top, left: coords.left }}
+          <div
+            data-request-menu={requestId}
+            className="fixed z-[9999] w-44 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
+            style={{ top: coords.top, left: coords.left }}
+          >
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text)] hover:bg-[var(--panel-soft)]"
+              onClick={() => {
+                setOpen(false);
+                onView?.(requestId);
+              }}
             >
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-[var(--text)] hover:bg-[var(--panel-soft)]"
-                onClick={() => {
-                  setOpen(false);
-                  onView?.(requestId);
-                }}
-              >
-                <Eye className="h-4 w-4 text-[var(--violet)]" />
-                View details
-              </button>
-            </div>,
-            document.body
-          )
+              <Eye className="h-4 w-4 text-[var(--violet)]" />
+              View details
+            </button>
+          </div>,
+          document.body
+        )
         : null}
     </>
   );
@@ -188,6 +194,26 @@ function toDateInputValue(iso) {
   if (match) return match[1];
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function ymdToday() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function ymdDaysAgo(days) {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  if (days != null && Number.isFinite(Number(days))) {
+    d.setDate(d.getDate() - Number(days));
+  }
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -217,6 +243,32 @@ function emptyForm() {
     checkOutTime: "",
     reason: "",
   };
+}
+
+function withLogId(row) {
+  if (!row) return null;
+  const logId = resolveAttendanceLogId(row);
+  if (!logId) return null;
+  return { ...row, logId };
+}
+
+function normalizeHistoryRows(rows) {
+  return (rows || []).map(withLogId).filter(Boolean);
+}
+
+function mergeHistoryLogs(prev, incoming) {
+  const next = normalizeHistoryRows(incoming);
+  if (!next.length) return prev;
+  const ids = new Set(prev.map((row) => String(row.logId)));
+  const extra = next.filter((row) => !ids.has(String(row.logId)));
+  return extra.length ? [...prev, ...extra] : prev;
+}
+
+function logsForDate(dateKey, list) {
+  if (!dateKey) return [];
+  return (list || []).filter(
+    (row) => toDateInputValue(row.attendanceDate) === dateKey
+  );
 }
 
 function Info({ label, value }) {
@@ -411,6 +463,16 @@ export function AttendanceChangeView({
 }) {
   const searchParams = useSearchParams();
   const prefillLogId = searchParams?.get("logId") || "";
+  const { settings } = useCompanySettings();
+  const { policy } = useAttendancePolicy();
+  const todayKey = ymdToday();
+  const windowDays = pickCorrectionWindowDays(
+    policy,
+    policy?.raw,
+    settings
+  );
+  const minSelectableDate =
+    windowDays != null ? ymdDaysAgo(windowDays) : undefined;
 
   const {
     status,
@@ -436,6 +498,9 @@ export function AttendanceChangeView({
   const [form, setForm] = useState(emptyForm);
   const [historyOptions, setHistoryOptions] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [dateLookupLoading, setDateLookupLoading] = useState(false);
+  const lookedUpDatesRef = useRef(new Set());
+  const lookupGenRef = useRef(0);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
@@ -493,9 +558,15 @@ export function AttendanceChangeView({
         const fromDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
         const from = `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, "0")}-01`;
         const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        const res = await getAttendanceHistory({ from, to, page: 1, limit: 60 });
+        const options = normalizeHistoryRows(
+          await getAttendanceHistoryAll({
+            from,
+            to,
+            pageSize: 100,
+            maxPages: 6,
+          })
+        );
         if (!alive) return;
-        const options = res.rows || [];
         setHistoryOptions(options);
 
         if (prefillLogId) {
@@ -637,19 +708,82 @@ export function AttendanceChangeView({
     [historyOptions, form.logId]
   );
 
-  function onPickLog(logId) {
-    const row = historyOptions.find((item) => item.logId === logId);
+  const dayLogs = useMemo(
+    () => logsForDate(form.attendanceDate, historyOptions),
+    [form.attendanceDate, historyOptions]
+  );
+
+  function applyLogToForm(dateKey, row) {
     if (!row) {
-      setForm((prev) => ({ ...prev, logId }));
+      setForm((prev) => ({
+        ...prev,
+        logId: "",
+        attendanceDate: dateKey || "",
+        checkInTime: "",
+        checkOutTime: "",
+      }));
       return;
     }
     setForm((prev) => ({
       ...prev,
       logId: row.logId,
-      attendanceDate: toDateInputValue(row.attendanceDate),
+      attendanceDate: dateKey || toDateInputValue(row.attendanceDate),
       checkInTime: toTimeInputValue(row.checkInTime),
       checkOutTime: toTimeInputValue(row.checkOutTime),
     }));
+  }
+
+  async function applyAttendanceDate(dateKey) {
+    if (!dateKey) {
+      setForm((prev) => ({
+        ...prev,
+        logId: "",
+        attendanceDate: "",
+      }));
+      return;
+    }
+    if (dateKey > todayKey) {
+      setFormError("Attendance date cannot be in the future.");
+      return;
+    }
+    if (minSelectableDate && dateKey < minSelectableDate) {
+      setFormError(
+        windowDays != null
+          ? `You can only correct attendance from the last ${windowDays} day${Number(windowDays) === 1 ? "" : "s"
+          }.`
+          : "This date is outside the allowed correction window."
+      );
+      return;
+    }
+    setFormError("");
+
+    const gen = ++lookupGenRef.current;
+    let matches = logsForDate(dateKey, historyOptions);
+
+    if (!matches.length && !lookedUpDatesRef.current.has(dateKey)) {
+      lookedUpDatesRef.current.add(dateKey);
+      setDateLookupLoading(true);
+      try {
+        const res = await getAttendanceHistory({
+          from: dateKey,
+          to: dateKey,
+          page: 1,
+          limit: 20,
+        });
+        const rows = normalizeHistoryRows(res.rows);
+        if (rows.length) {
+          setHistoryOptions((prev) => mergeHistoryLogs(prev, rows));
+          matches = logsForDate(dateKey, rows);
+        }
+      } catch {
+        lookedUpDatesRef.current.delete(dateKey);
+      } finally {
+        if (gen === lookupGenRef.current) setDateLookupLoading(false);
+      }
+    }
+
+    if (gen !== lookupGenRef.current) return;
+    applyLogToForm(dateKey, matches[0] || null);
   }
 
   async function handleSubmit(event) {
@@ -659,6 +793,19 @@ export function AttendanceChangeView({
 
     if (!form.attendanceDate || !form.checkInTime || !form.checkOutTime) {
       setFormError("Date, check-in and check-out time are required.");
+      return;
+    }
+    if (form.attendanceDate > todayKey) {
+      setFormError("Attendance date cannot be in the future.");
+      return;
+    }
+    if (minSelectableDate && form.attendanceDate < minSelectableDate) {
+      setFormError(
+        windowDays != null
+          ? `You can only correct attendance from the last ${windowDays} day${Number(windowDays) === 1 ? "" : "s"
+          }.`
+          : "This date is outside the allowed correction window."
+      );
       return;
     }
     if (!form.reason.trim()) {
@@ -690,7 +837,7 @@ export function AttendanceChangeView({
       const res = await submitAttendanceChange(payload);
       setFormSuccess(
         res?.message ||
-          "Attendance change request submitted (pending approval)."
+        "Attendance change request submitted (pending approval)."
       );
       setForm(emptyForm());
       setShowForm(false);
@@ -847,48 +994,78 @@ export function AttendanceChangeView({
           setFormError("");
         }}
         title="Submit correction"
-        subtitle="Select a past log to prefill, then adjust the times"
+        subtitle="Pick an attendance date to prefill punch times, then adjust if needed"
         wide
       >
         <form className="space-y-4 pb-8" onSubmit={handleSubmit}>
-          <label className="block text-[12px] font-medium text-[var(--muted)]">
-            Attendance log
-            <select
-              className={fieldClass}
-              value={form.logId}
-              onChange={(e) => onPickLog(e.target.value)}
-              disabled={historyLoading}
-            >
-              <option value="">Select a past day to prefill (optional)…</option>
-              {historyOptions.map((row) => (
-                <option key={row.logId} value={row.logId}>
-                  {formatDate(row.attendanceDate, dateFormat)} · In{" "}
-                  {formatTime(row.checkInTime, timeFormat)} · Out{" "}
-                  {formatTime(row.checkOutTime, timeFormat)}
-                </option>
-              ))}
-            </select>
-          </label>
-
           <MuiDateField
             label="Attendance date"
             required
-            dateFormat={dateFormat || "DD/MM/YYYY"}
+            dateFormat={dateFormat}
             value={form.attendanceDate}
-            onChange={(next) =>
-              setForm((prev) => ({ ...prev, attendanceDate: next }))
-            }
+            min={minSelectableDate}
+            max={todayKey}
+            onChange={(next) => {
+              if (next === form.attendanceDate) return;
+              applyAttendanceDate(next);
+            }}
           />
+          <p className="text-[11px] leading-snug text-[var(--muted)]">
+            {windowDays != null
+              ? `Future dates are blocked. You can correct the last ${windowDays} day${Number(windowDays) === 1 ? "" : "s"
+              }.`
+              : "Future dates are not selectable."}
+          </p>
+          {dayLogs.length > 1 ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-[var(--muted)]">
+                Multiple punches this day — pick one to prefill
+              </p>
+              {dayLogs.map((row) => {
+                const active = row.logId === form.logId;
+                return (
+                  <button
+                    key={row.logId}
+                    type="button"
+                    onClick={() => applyLogToForm(form.attendanceDate, row)}
+                    className={[
+                      "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-[12px] transition",
+                      active
+                        ? "border-[var(--violet)] bg-[var(--lavender-soft)] text-[var(--text)]"
+                        : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--violet)]/40",
+                    ].join(" ")}
+                  >
+                    <span>
+                      In {formatTime(row.checkInTime, timeFormat)} → Out{" "}
+                      {formatTime(row.checkOutTime, timeFormat)}
+                    </span>
+                    {active ? (
+                      <span className="font-semibold text-[var(--violet)]">
+                        Prefilling
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
 
           <div className="flex items-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] px-3 py-2.5 text-[12px] text-[var(--muted)]">
             <Clock3 className="h-4 w-4 shrink-0 text-[var(--violet)]" />
-            {selectedLog ? (
+            {historyLoading || dateLookupLoading ? (
+              <span>Looking up punch log for this date…</span>
+            ) : selectedLog ? (
               <span>
                 Original recorded:{" "}
                 <span className="font-semibold text-[var(--text)]">
                   {formatTime(selectedLog.checkInTime, timeFormat)} →{" "}
                   {formatTime(selectedLog.checkOutTime, timeFormat)}
                 </span>
+                <span className="ml-1">You can edit the times below.</span>
+              </span>
+            ) : form.attendanceDate ? (
+              <span>
+                No punch log for this date — enter corrected times manually.
               </span>
             ) : (
               <span>No log selected — enter corrected times manually.</span>

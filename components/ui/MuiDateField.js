@@ -176,6 +176,7 @@ export function MuiDateRangeFields({
   required = false,
   dateFormat,
   className = "",
+  linked = true,
 }) {
   return withPickerProviders(
     <div className={`grid gap-3 sm:grid-cols-2 ${className}`}>
@@ -183,7 +184,7 @@ export function MuiDateRangeFields({
         label={fromLabel}
         value={from}
         onChange={onFromChange}
-        max={to || undefined}
+        max={linked ? to || undefined : undefined}
         clearable={clearable}
         required={required}
         dateFormat={dateFormat}
@@ -192,7 +193,7 @@ export function MuiDateRangeFields({
         label={toLabel}
         value={to}
         onChange={onToChange}
-        min={from || undefined}
+        min={linked ? from || undefined : undefined}
         clearable={clearable}
         required={required}
         dateFormat={dateFormat}
