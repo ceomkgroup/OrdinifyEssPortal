@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import "dayjs/locale/en-gb";
@@ -12,56 +12,89 @@ import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 dayjs.extend(customParseFormat);
 
-const pickerTheme = createTheme({
-  palette: {
-    primary: {
-      main: "#7b39ec",
-      light: "#a78af9",
-      dark: "#4b1d94",
+/** Hex-only palette — MUI color utils reject CSS `var(--…)`. */
+function createPickerTheme(mode = "light") {
+  const dark = mode === "dark";
+  return createTheme({
+    palette: {
+      mode,
+      primary: {
+        main: dark ? "#8b5cf6" : "#7b39ec",
+        light: "#a78af9",
+        dark: "#4b1d94",
+      },
+      text: {
+        primary: dark ? "#f5f3ff" : "#1f2937",
+        secondary: dark ? "#c4bdd9" : "#7b738f",
+        disabled: dark ? "#c4bdd9" : "#8b849c",
+      },
+      action: {
+        active: dark ? "#c4b5fd" : "#6b6287",
+      },
+      background: {
+        paper: dark ? "#221c38" : "#ffffff",
+        default: dark ? "#0b0914" : "#f3f2f8",
+      },
+      divider: dark ? "#4a3f6b" : "#e8e6ef",
     },
-  },
-  shape: { borderRadius: 12 },
-  typography: {
-    fontFamily: "var(--font-body), system-ui, sans-serif",
-    fontSize: 13,
-  },
-  components: {
-    MuiOutlinedInput: {
-      styleOverrides: {
-        root: {
-          backgroundColor: "var(--surface)",
-          "& .MuiOutlinedInput-notchedOutline": {
-            borderColor: "var(--border)",
+    shape: { borderRadius: 12 },
+    typography: {
+      fontFamily: "var(--font-body), system-ui, sans-serif",
+      fontSize: 13,
+    },
+    components: {
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: {
+            backgroundColor: "var(--surface)",
+            "& .MuiOutlinedInput-notchedOutline": {
+              borderColor: "var(--border)",
+            },
+            "&:hover .MuiOutlinedInput-notchedOutline": {
+              borderColor: "rgba(123, 57, 236, 0.45)",
+            },
+            "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+              borderColor: dark ? "#8b5cf6" : "#7b39ec",
+              borderWidth: 1.5,
+            },
           },
-          "&:hover .MuiOutlinedInput-notchedOutline": {
-            borderColor: "rgba(123, 57, 236, 0.45)",
-          },
-          "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-            borderColor: "#7b39ec",
-            borderWidth: 1.5,
+          input: {
+            paddingTop: 10,
+            paddingBottom: 10,
+            fontSize: 13,
+            fontWeight: 600,
           },
         },
-        input: {
-          paddingTop: 10,
-          paddingBottom: 10,
-          fontSize: 13,
-          fontWeight: 600,
-          color: "var(--text)",
+      },
+      MuiInputLabel: {
+        styleOverrides: {
+          root: {
+            fontSize: 13,
+            fontWeight: 600,
+            "&.Mui-focused": { color: dark ? "#8b5cf6" : "#7b39ec" },
+          },
         },
       },
     },
-    MuiInputLabel: {
-      styleOverrides: {
-        root: {
-          fontSize: 13,
-          fontWeight: 600,
-          color: "var(--muted)",
-          "&.Mui-focused": { color: "#7b39ec" },
-        },
-      },
-    },
-  },
-});
+  });
+}
+
+function useDocumentColorMode() {
+  const [mode, setMode] = useState("light");
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => {
+      setMode(root.getAttribute("data-theme") === "dark" ? "dark" : "light");
+    };
+    sync();
+    const obs = new MutationObserver(sync);
+    obs.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+
+  return mode;
+}
 
 /** Company dateFormat → picker display. Default always day/month/year. */
 export function toPickerDateFormat(dateFormat = "DD/MM/YYYY") {
@@ -146,9 +179,12 @@ function DateFieldInner({
   );
 }
 
-function withPickerProviders(children) {
+function PickerProviders({ children }) {
+  const mode = useDocumentColorMode();
+  const theme = useMemo(() => createPickerTheme(mode), [mode]);
+
   return (
-    <ThemeProvider theme={pickerTheme}>
+    <ThemeProvider theme={theme}>
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="en-gb">
         {children}
       </LocalizationProvider>
@@ -161,7 +197,11 @@ function withPickerProviders(children) {
  * Display defaults to DD/MM/YYYY (day / month / year).
  */
 export function MuiDateField(props) {
-  return withPickerProviders(<DateFieldInner {...props} />);
+  return (
+    <PickerProviders>
+      <DateFieldInner {...props} />
+    </PickerProviders>
+  );
 }
 
 /** From + To pair for attendance / request filter drawers. */
@@ -178,26 +218,28 @@ export function MuiDateRangeFields({
   className = "",
   linked = true,
 }) {
-  return withPickerProviders(
-    <div className={`grid gap-3 sm:grid-cols-2 ${className}`}>
-      <DateFieldInner
-        label={fromLabel}
-        value={from}
-        onChange={onFromChange}
-        max={linked ? to || undefined : undefined}
-        clearable={clearable}
-        required={required}
-        dateFormat={dateFormat}
-      />
-      <DateFieldInner
-        label={toLabel}
-        value={to}
-        onChange={onToChange}
-        min={linked ? from || undefined : undefined}
-        clearable={clearable}
-        required={required}
-        dateFormat={dateFormat}
-      />
-    </div>
+  return (
+    <PickerProviders>
+      <div className={`grid gap-3 sm:grid-cols-2 ${className}`}>
+        <DateFieldInner
+          label={fromLabel}
+          value={from}
+          onChange={onFromChange}
+          max={linked ? to || undefined : undefined}
+          clearable={clearable}
+          required={required}
+          dateFormat={dateFormat}
+        />
+        <DateFieldInner
+          label={toLabel}
+          value={to}
+          onChange={onToChange}
+          min={linked ? from || undefined : undefined}
+          clearable={clearable}
+          required={required}
+          dateFormat={dateFormat}
+        />
+      </div>
+    </PickerProviders>
   );
 }

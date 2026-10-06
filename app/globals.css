@@ -34,6 +34,14 @@ html[data-theme="light"] {
   --btn-primary-text: #ffffff;
   --btn-outline-border: #7b39ec;
   --btn-outline-text: #7b39ec;
+  /* Slide-over drawers — clear lift over page */
+  --drawer-surface: #ffffff;
+  --drawer-border: #e8e6ef;
+  --drawer-overlay: rgba(15, 10, 30, 0.48);
+  --drawer-shadow: -20px 0 60px rgba(15, 23, 42, 0.18);
+  /* Form placeholders + native date/time icons */
+  --placeholder: #7b738f;
+  --field-icon: #6b6287;
 }
 
 html[data-theme="dark"] {
@@ -48,7 +56,7 @@ html[data-theme="dark"] {
   --text: #f5f3ff;
   --muted: #9d95b5;
   --muted-bg: #1c1730;
-  --border: #2c2542;
+  --border: #3a3358;
   --input-bg: #1c1730;
   --panel-soft: #1c1730;
   --success: #34d399;
@@ -67,6 +75,14 @@ html[data-theme="dark"] {
   --btn-primary-text: #ffffff;
   --btn-outline-border: #a78bfa;
   --btn-outline-text: #c4b5fd;
+  /* Elevated vs page (#0b0914) + cards (#151124) so drawers don't blend */
+  --drawer-surface: #221c38;
+  --drawer-border: #4a3f6b;
+  --drawer-overlay: rgba(0, 0, 0, 0.68);
+  --drawer-shadow: -24px 0 72px rgba(0, 0, 0, 0.55), -1px 0 0 rgba(167, 139, 250, 0.12);
+  /* Brighter than --muted so empty fields stay readable on dark surfaces */
+  --placeholder: #c4bdd9;
+  --field-icon: #c4b5fd;
 }
 
 @theme inline {
@@ -289,4 +305,111 @@ a {
 .sidebar-nav::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--violet) 22%, var(--border));
   border-radius: 99px;
+}
+
+/* Placeholders — theme token (readable in dark drawers) */
+input::placeholder,
+textarea::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+/* Native time / date clock & calendar icons */
+input[type="time"],
+input[type="date"],
+input[type="datetime-local"] {
+  color: var(--text);
+  color-scheme: inherit;
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 1;
+  filter: none;
+}
+
+html[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator,
+html[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+html[data-theme="dark"]
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  /* Native icons are dark glyphs — invert for dark UI */
+  filter: invert(0.88) brightness(1.25) sepia(0.35) hue-rotate(220deg)
+    saturate(2.2);
+  opacity: 0.95;
+}
+
+/* MUI DatePicker field — force theme colors (picker UI itself unchanged) */
+.MuiOutlinedInput-root {
+  color: var(--text);
+}
+
+.MuiOutlinedInput-input::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+  -webkit-text-fill-color: var(--placeholder);
+}
+
+.MuiOutlinedInput-root .MuiIconButton-root,
+.MuiOutlinedInput-root .MuiSvgIcon-root {
+  color: var(--field-icon);
+}
+
+.MuiOutlinedInput-root .MuiIconButton-root:hover {
+  color: var(--violet);
+  background-color: var(--lavender-soft);
+}
+
+/*
+ * Multi-section date field (DD / MM / YYYY).
+ * MUI light theme paints text.primary (near-black) + 0.42 opacity when empty —
+ * that vanishes on dark surfaces. Force readable colors.
+ */
+.MuiPickersInputBase-root,
+.MuiPickersOutlinedInput-root {
+  color: var(--text) !important;
+}
+
+.MuiPickersInputBase-sectionsContainer,
+.MuiPickersSectionList-root {
+  color: inherit !important;
+}
+
+html[data-theme="dark"] .MuiPickersInputBase-sectionsContainer {
+  /* Override MUI empty-field opacity (0.42) so format stays visible */
+  opacity: 1 !important;
+}
+
+.MuiPickersSectionList-sectionContent,
+.MuiPickersInputBase-sectionContent {
+  color: inherit !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: currentColor;
+}
+
+.MuiPickersSectionList-sectionContent[aria-valuetext="Empty"] {
+  color: var(--placeholder) !important;
+  -webkit-text-fill-color: var(--placeholder) !important;
+}
+
+.MuiPickersOutlinedInput-root .MuiIconButton-root,
+.MuiPickersOutlinedInput-root .MuiSvgIcon-root,
+.MuiPickersFilledInput-root .MuiIconButton-root,
+.MuiPickersInputBase-root .MuiIconButton-root {
+  color: var(--field-icon);
+}
+
+.MuiPickersOutlinedInput-root .MuiIconButton-root:hover,
+.MuiPickersInputBase-root .MuiIconButton-root:hover {
+  color: var(--violet);
+  background-color: var(--lavender-soft);
+}
+
+/* Native time field text + icon stay readable in dark drawers */
+html[data-theme="dark"] input[type="time"],
+html[data-theme="dark"] input[type="date"],
+html[data-theme="dark"] input[type="datetime-local"] {
+  color: var(--text);
+  color-scheme: dark;
 }

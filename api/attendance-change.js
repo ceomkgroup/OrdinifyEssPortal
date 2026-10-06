@@ -67,7 +67,8 @@ export async function getAttendanceChangeRequest(requestId) {
 /**
  * Submit attendance correction request.
  * POST /api/employee/portal/attendance-change
- * Body: logId?, attendanceDate, checkInTime, checkOutTime, reason
+ * Body: logId?, attendanceDate, checkInTime?, checkOutTime?, reason
+ * At least one of checkInTime / checkOutTime should be sent.
  */
 export async function createAttendanceChangeRequest(payload) {
   try {

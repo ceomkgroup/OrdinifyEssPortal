@@ -791,8 +791,12 @@ export function AttendanceChangeView({
     setFormError("");
     setFormSuccess("");
 
-    if (!form.attendanceDate || !form.checkInTime || !form.checkOutTime) {
-      setFormError("Date, check-in and check-out time are required.");
+    if (!form.attendanceDate) {
+      setFormError("Attendance date is required.");
+      return;
+    }
+    if (!form.checkInTime && !form.checkOutTime) {
+      setFormError("Fill at least one — check-in or check-out.");
       return;
     }
     if (form.attendanceDate > todayKey) {
@@ -813,13 +817,25 @@ export function AttendanceChangeView({
       return;
     }
 
-    const checkInTime = toIsoFromLocal(form.attendanceDate, form.checkInTime);
-    const checkOutTime = toIsoFromLocal(form.attendanceDate, form.checkOutTime);
-    if (!checkInTime || !checkOutTime) {
-      setFormError("Invalid date or time.");
+    const checkInTime = form.checkInTime
+      ? toIsoFromLocal(form.attendanceDate, form.checkInTime)
+      : null;
+    const checkOutTime = form.checkOutTime
+      ? toIsoFromLocal(form.attendanceDate, form.checkOutTime)
+      : null;
+    if (form.checkInTime && !checkInTime) {
+      setFormError("Invalid check-in time.");
       return;
     }
-    if (new Date(checkOutTime) <= new Date(checkInTime)) {
+    if (form.checkOutTime && !checkOutTime) {
+      setFormError("Invalid check-out time.");
+      return;
+    }
+    if (
+      checkInTime &&
+      checkOutTime &&
+      new Date(checkOutTime) <= new Date(checkInTime)
+    ) {
       setFormError("Check-out must be after check-in.");
       return;
     }
@@ -828,10 +844,10 @@ export function AttendanceChangeView({
     try {
       const payload = {
         attendanceDate: form.attendanceDate,
-        checkInTime,
-        checkOutTime,
         reason: form.reason.trim(),
       };
+      if (checkInTime) payload.checkInTime = checkInTime;
+      if (checkOutTime) payload.checkOutTime = checkOutTime;
       if (form.logId) payload.logId = form.logId;
 
       const res = await submitAttendanceChange(payload);
@@ -854,7 +870,7 @@ export function AttendanceChangeView({
     <PortalPage
       fill
       title="Attendance Change"
-      subtitle="Wrong punch time? Submit a correction with date, in/out times, and reason. Pending requests can be cancelled anytime."
+      subtitle="Wrong punch time? Submit a correction with date, check-in and/or check-out, and reason. Pending requests can be cancelled anytime."
       actions={
         <>
           <Button
@@ -1075,9 +1091,11 @@ export function AttendanceChangeView({
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-[12px] font-medium text-[var(--muted)]">
               Requested check-in
+              <span className="ml-1 font-normal text-[var(--muted)]">
+                (optional)
+              </span>
               <input
                 type="time"
-                required
                 className={fieldClass}
                 value={form.checkInTime}
                 onChange={(e) =>
@@ -1088,9 +1106,11 @@ export function AttendanceChangeView({
 
             <label className="block text-[12px] font-medium text-[var(--muted)]">
               Requested check-out
+              <span className="ml-1 font-normal text-[var(--muted)]">
+                (optional)
+              </span>
               <input
                 type="time"
-                required
                 className={fieldClass}
                 value={form.checkOutTime}
                 onChange={(e) =>
@@ -1099,6 +1119,9 @@ export function AttendanceChangeView({
               />
             </label>
           </div>
+          <p className="text-[11px] text-[var(--muted)]">
+            At least one of check-in or check-out is required.
+          </p>
 
           <label className="block text-[12px] font-medium text-[var(--muted)]">
             Reason
