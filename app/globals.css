@@ -363,45 +363,40 @@ html[data-theme="dark"]
 
 /*
  * Multi-section date field (DD / MM / YYYY).
- * MUI light theme paints text.primary (near-black) + 0.42 opacity when empty —
- * that vanishes on dark surfaces. Force readable colors.
+ * Do NOT force sectionsContainer opacity:1 — MUI sets opacity:0 when the
+ * floating label is not shrunk so label + format don't stack. Dark mode
+ * readability comes from palette sync + light --text/--placeholder tokens.
  */
-.MuiPickersInputBase-root,
-.MuiPickersOutlinedInput-root {
+html[data-theme="dark"] .MuiPickersInputBase-root,
+html[data-theme="dark"] .MuiPickersOutlinedInput-root {
   color: var(--text) !important;
 }
 
-.MuiPickersInputBase-sectionsContainer,
-.MuiPickersSectionList-root {
-  color: inherit !important;
+html[data-theme="dark"] .MuiPickersInputBase-sectionsContainer,
+html[data-theme="dark"] .MuiPickersSectionList-root {
+  color: inherit;
 }
 
-html[data-theme="dark"] .MuiPickersInputBase-sectionsContainer {
-  /* Override MUI empty-field opacity (0.42) so format stays visible */
-  opacity: 1 !important;
-}
-
-.MuiPickersSectionList-sectionContent,
-.MuiPickersInputBase-sectionContent {
-  color: inherit !important;
-  opacity: 1 !important;
+html[data-theme="dark"] .MuiPickersSectionList-sectionContent,
+html[data-theme="dark"] .MuiPickersInputBase-sectionContent {
   -webkit-text-fill-color: currentColor;
 }
 
-.MuiPickersSectionList-sectionContent[aria-valuetext="Empty"] {
+html[data-theme="dark"]
+  .MuiPickersSectionList-sectionContent[aria-valuetext="Empty"] {
   color: var(--placeholder) !important;
   -webkit-text-fill-color: var(--placeholder) !important;
 }
 
-.MuiPickersOutlinedInput-root .MuiIconButton-root,
-.MuiPickersOutlinedInput-root .MuiSvgIcon-root,
-.MuiPickersFilledInput-root .MuiIconButton-root,
-.MuiPickersInputBase-root .MuiIconButton-root {
+html[data-theme="dark"] .MuiPickersOutlinedInput-root .MuiIconButton-root,
+html[data-theme="dark"] .MuiPickersOutlinedInput-root .MuiSvgIcon-root,
+html[data-theme="dark"] .MuiPickersFilledInput-root .MuiIconButton-root,
+html[data-theme="dark"] .MuiPickersInputBase-root .MuiIconButton-root {
   color: var(--field-icon);
 }
 
-.MuiPickersOutlinedInput-root .MuiIconButton-root:hover,
-.MuiPickersInputBase-root .MuiIconButton-root:hover {
+html[data-theme="dark"] .MuiPickersOutlinedInput-root .MuiIconButton-root:hover,
+html[data-theme="dark"] .MuiPickersInputBase-root .MuiIconButton-root:hover {
   color: var(--violet);
   background-color: var(--lavender-soft);
 }

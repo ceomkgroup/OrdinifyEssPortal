@@ -162,6 +162,11 @@ function DateFieldInner({
             fullWidth: true,
             required,
             placeholder: displayFormat,
+            // Keep label floated so DD/MM/YYYY never stacks under "Date *"
+            InputLabelProps: { shrink: true },
+            slotProps: {
+              inputLabel: { shrink: true },
+            },
           },
           field: {
             clearable: Boolean(clearable),
