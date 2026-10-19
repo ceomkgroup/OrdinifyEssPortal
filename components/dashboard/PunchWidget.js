@@ -97,6 +97,30 @@ function getShiftDurationMinutes(shift) {
 }
 
 /**
+ * Split / custom block shifts may punch in again after check-out.
+ * Attempt limits are enforced by the API (not the UI yet).
+ */
+function allowsMultiplePunches(shift) {
+  const type = String(
+    shift?.shiftTypeRaw || shift?.shiftType || shift?.type || ""
+  )
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+  const name = String(shift?.shiftName || "").toUpperCase();
+  const split =
+    type === "SPLIT" ||
+    type === "SPLIT_SHIFT" ||
+    type.includes("SPLIT") ||
+    name.includes("SPLIT");
+  const block =
+    type === "CUSTOM_BLOCK_SHIFT" ||
+    type === "BLOCK_SHIFT" ||
+    type === "BLOCK" ||
+    type.includes("BLOCK");
+  return split || block;
+}
+
+/**
  * Progress uses working time only (total elapsed minus breaks).
  * Freezes while on break; resumes after break-in.
  */
@@ -183,18 +207,26 @@ export function PunchWidget({
     timer?.punchOutAt ||
     null;
 
-  // Infer punch state from times when API omits boolean flags.
-  const punchedOut = Boolean(
-    todayAttendance?.isCheckedOut === true ||
-    (punchInAt && punchOutAt) ||
-    (timer?.punchInAt && timer?.punchOutAt && !todayAttendance)
-  );
-  const punchedIn = Boolean(
-    !punchedOut &&
-    (todayAttendance?.isCheckedIn === true ||
-      Boolean(punchInAt) ||
-      (Boolean(timer?.punchInAt) && !todayAttendance))
-  );
+  // Prefer API flags when present so a new segment isn't stuck "out"
+  // just because both check-in and check-out timestamps still exist.
+  const hasApiPunchFlags =
+    typeof todayAttendance?.isCheckedIn === "boolean" ||
+    typeof todayAttendance?.isCheckedOut === "boolean";
+  let punchedIn;
+  let punchedOut;
+  if (hasApiPunchFlags) {
+    punchedIn = todayAttendance?.isCheckedIn === true;
+    punchedOut = !punchedIn && todayAttendance?.isCheckedOut === true;
+  } else {
+    punchedOut = Boolean(
+      (punchInAt && punchOutAt) ||
+      (timer?.punchInAt && timer?.punchOutAt && !todayAttendance)
+    );
+    punchedIn = Boolean(
+      !punchedOut &&
+      (Boolean(punchInAt) || (Boolean(timer?.punchInAt) && !todayAttendance))
+    );
+  }
   const isOnBreak = Boolean(
     breakEnabled &&
     punchedIn &&
@@ -307,7 +339,15 @@ export function PunchWidget({
     [shift, punchInAt, punchedIn, punchedOut, timeStats.workingMinutes]
   );
 
-  const punchInDisabled = !canWebPunch || punchedIn || punchedOut || punching;
+  const multiPunch =
+    allowsMultiplePunches(shift) || allowsMultiplePunches(todayAttendance);
+
+  // Split / block: allow punch-in again after check-out for the next segment.
+  const punchInDisabled =
+    !canWebPunch ||
+    punchedIn ||
+    punching ||
+    (!multiPunch && punchedOut);
   const punchOutDisabled =
     !canWebPunch ||
     !punchedIn ||
@@ -336,15 +376,17 @@ export function PunchWidget({
 
   const statusText = !canWebPunch
     ? "Web punch is not allowed on your account."
-    : punchedOut
-      ? "Shift completed for today."
-      : isOnBreak
-        ? "On break — shift progress is paused."
-        : punchedIn && breakEnabled && !breakQuotaAvailable
-          ? "Break limit reached for today."
-          : punchedIn
-            ? "You are punched in. Progress is running."
-            : "You haven’t punched in yet.";
+    : punchedOut && multiPunch && !punchedIn
+      ? "Segment complete — punch in again for your next period."
+      : punchedOut
+        ? "Shift completed for today."
+        : isOnBreak
+          ? "On break — shift progress is paused."
+          : punchedIn && breakEnabled && !breakQuotaAvailable
+            ? "Break limit reached for today."
+            : punchedIn
+              ? "You are punched in. Progress is running."
+              : "You haven’t punched in yet.";
 
   const displayShiftName =
     todayAttendance?.shiftName || shift?.shiftName || null;
@@ -619,6 +661,12 @@ export function PunchWidget({
                     : "Punch Out"}
                 </Button>
               </div>
+
+              {multiPunch ? (
+                <p className="text-center text-[11px] text-[var(--muted)]">
+                  Multiple check-in / check-out allowed for this shift.
+                </p>
+              ) : null}
 
               {punchError ? (
                 <FlashBanner
