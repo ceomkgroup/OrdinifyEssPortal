@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  ArrowLeftRight,
   Banknote,
   BriefcaseBusiness,
   CalendarClock,
@@ -20,6 +21,7 @@ import { getRequestTypeByKey } from "@/lib/request-types";
 const REQUESTS = [
   { key: "leave", label: "Leave", icon: Palmtree, tone: "bg-[var(--info-soft)] text-[var(--info)]" },
   { key: "shiftChange", label: "Shift Change", icon: RefreshCw, tone: "bg-[var(--warning-soft)] text-[var(--warning)]" },
+  { key: "shiftSwap", label: "Shift Swap", icon: ArrowLeftRight, tone: "bg-[var(--lavender-soft)] text-[var(--violet)]" },
   { key: "wfh", label: "WFH", icon: Home, tone: "bg-[var(--success-soft)] text-[var(--success)]" },
   { key: "onDuty", label: "On Duty", icon: BriefcaseBusiness, tone: "bg-[var(--lavender-soft)] text-[var(--violet)]" },
   { key: "overtime", label: "Overtime", icon: Clock3, tone: "bg-[var(--danger-soft)] text-[var(--danger)]" },

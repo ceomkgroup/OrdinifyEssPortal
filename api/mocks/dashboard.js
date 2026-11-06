@@ -90,6 +90,7 @@ export const dashboardMock = {
     pendingRequests: {
       leave: 0,
       shiftChange: 0,
+      shiftSwap: 0,
       wfh: 0,
       onDuty: 0,
       overtime: 0,

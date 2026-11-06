@@ -148,6 +148,8 @@ const TEAM_INBOX_TABS = {
   team_overtime: "overtime",
   shift_change: "shiftChange",
   team_shift_change: "shiftChange",
+  shift_swap: "shiftSwap",
+  team_shift_swap: "shiftSwap",
   comp_off: "compOff",
   team_comp_off: "compOff",
   loan: "loan",
@@ -207,6 +209,8 @@ export function getNotificationHref(row) {
       return "/leave/logs";
     case "shift_change":
       return "/requests/shift-change";
+    case "shift_swap":
+      return "/requests/shift-swap";
     case "comp_off":
       return "/requests/comp-off";
     case "loan":

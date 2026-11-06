@@ -7,6 +7,7 @@ import { listCompOffRequests } from "@/api/comp-off";
 import { listOnDutyRequests } from "@/api/on-duty";
 import { listOvertimeRequests } from "@/api/overtime";
 import { listShiftChangeRequests } from "@/api/shift-change";
+import { listShiftSwapRequests } from "@/api/shift-swap";
 import { listWfhRequests } from "@/api/wfh";
 import { listLoansRequests } from "@/api/loans";
 import { listAdvancesRequests } from "@/api/advances";
@@ -19,7 +20,13 @@ const FETCH_LIMIT = 50;
 
 function statusBucket(status) {
   const s = String(status || "").toLowerCase();
-  if (s === "pending" || s === "submitted" || s === "in_progress") {
+  if (
+    s === "pending" ||
+    s === "pending_peer" ||
+    s === "pending_approval" ||
+    s === "submitted" ||
+    s === "in_progress"
+  ) {
     return "pending";
   }
   if (s === "approved") return "approved";
@@ -114,6 +121,33 @@ function mapShiftChangeRow(row) {
     status: row.statusLabel || row.status || "—",
     statusBucket: statusBucket(row.status),
     createdAt: row.createdAt || row.effectiveDate || null,
+    reason: row.reason || "",
+  };
+}
+
+function swapPeriod(row) {
+  const start = formatDate(row.fromDate || row.startDate || row.swapDate);
+  const end = formatDate(row.toDate || row.endDate || row.fromDate || row.swapDate);
+  if (start && end && start !== end) return `${start} – ${end}`;
+  return start || end || "—";
+}
+
+function mapShiftSwapRow(row) {
+  const type = getRequestTypeByKey("shiftSwap");
+  const other = row.peerName || row.requesterName || "a colleague";
+  return {
+    id: `shiftSwap:${row.requestId || row.id}`,
+    requestId: row.requestId || row.id,
+    typeKey: "shiftSwap",
+    typeLabel: type?.title || "Shift Swap",
+    href: type?.href || "/requests/shift-swap",
+    summary: row.reason
+      ? String(row.reason).slice(0, 72)
+      : `Shift swap with ${other}`,
+    period: swapPeriod(row),
+    status: row.statusLabel || row.status || "—",
+    statusBucket: statusBucket(row.status),
+    createdAt: row.createdAt || row.fromDate || row.swapDate || null,
     reason: row.reason || "",
   };
 }
@@ -311,6 +345,7 @@ export function useAllRequests({ typeFilter = "all" } = {}) {
     if (canShowRequestTile("encashment")) list.push("encashment");
     if (canShowRequestTile("attendanceChange")) list.push("attendanceChange");
     if (canShowRequestTile("shiftChange")) list.push("shiftChange");
+    if (canShowRequestTile("shiftSwap")) list.push("shiftSwap");
     if (canShowRequestTile("compOff")) list.push("compOff");
     if (canShowRequestTile("overtime")) list.push("overtime");
     if (canShowRequestTile("wfh")) list.push("wfh");
@@ -378,6 +413,15 @@ export function useAllRequests({ typeFilter = "all" } = {}) {
               page: 1,
               limit: FETCH_LIMIT,
             }).then((res) => (res.rows || []).map(mapShiftChangeRow))
+          );
+        }
+        if (sourceList.includes("shiftSwap")) {
+          tasks.push(
+            listShiftSwapRequests({
+              status: "all",
+              page: 1,
+              limit: FETCH_LIMIT,
+            }).then((res) => (res.rows || []).map(mapShiftSwapRow))
           );
         }
         if (sourceList.includes("compOff")) {
