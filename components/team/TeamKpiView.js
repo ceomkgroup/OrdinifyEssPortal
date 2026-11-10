@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, Gauge, SearchX, Star } from "lucide-react";
 import { rateTeamKpiScore } from "@/api/team";
 import { KpiStatusPill, RatingPill, SourcePill } from "@/components/kpi/KpiBadges";
@@ -62,6 +62,7 @@ export function TeamKpiView() {
   const [flash, setFlash] = useState("");
   const [selected, setSelected] = useState(null);
   const [rateKpi, setRateKpi] = useState(null);
+  const skipUrlOpen = useRef(false);
   const [saving, setSaving] = useState(false);
 
   usePersistListQuery(
@@ -76,16 +77,21 @@ export function TeamKpiView() {
   });
 
   useEffect(() => {
-    let alive = true;
-    queueMicrotask(() => {
-      if (!alive || !employeeFromUrl || selected) return;
-      const match = list.rows.find((row) => row.employeeId === employeeFromUrl);
-      if (match) setSelected(match);
-    });
-    return () => {
-      alive = false;
-    };
+    if (skipUrlOpen.current) {
+      if (!employeeFromUrl) skipUrlOpen.current = false;
+      return undefined;
+    }
+    if (!employeeFromUrl || selected) return undefined;
+    const match = list.rows.find((row) => row.employeeId === employeeFromUrl);
+    if (match) setSelected(match);
+    return undefined;
   }, [employeeFromUrl, list.rows, selected]);
+
+  function closeMember() {
+    skipUrlOpen.current = true;
+    setRateKpi(null);
+    setSelected(null);
+  }
 
   const memberKpi = useTeamMemberKpi({
     employeeId: selected?.employeeId,
@@ -189,14 +195,29 @@ export function TeamKpiView() {
               {
                 label: "View KPIs",
                 icon: <Eye className="h-4 w-4 text-[var(--violet)]" />,
-                onClick: () => setSelected(row),
+                onClick: () => {
+                  skipUrlOpen.current = false;
+                  setSelected(row);
+                },
               },
+              ...(canRate
+                ? [
+                    {
+                      label: "Rate KPIs",
+                      icon: <Star className="h-4 w-4 text-[var(--warning)]" />,
+                      onClick: () => {
+                        skipUrlOpen.current = false;
+                        setSelected(row);
+                      },
+                    },
+                  ]
+                : []),
             ]}
           />
         ),
       },
     ],
-    [pageSize, safePage]
+    [pageSize, safePage, canRate]
   );
 
   async function saveRating({ score, comment }) {
@@ -356,7 +377,7 @@ export function TeamKpiView() {
 
       <SlideOver
         open={Boolean(selected)}
-        onClose={() => setSelected(null)}
+        onClose={closeMember}
         wide
         title="Member KPIs"
         subtitle={selected?.employeeName || ""}

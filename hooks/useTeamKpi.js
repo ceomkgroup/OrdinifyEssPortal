@@ -62,6 +62,7 @@ export function useTeamMemberKpi({
   enabled = true,
 } = {}) {
   const [summary, setSummary] = useState(null);
+  const [loadedFor, setLoadedFor] = useState("");
   const [loading, setLoading] = useState(
     Boolean(enabled && employeeId && periodId)
   );
@@ -76,6 +77,7 @@ export function useTeamMemberKpi({
         if (!alive) return;
         setLoading(false);
         setSummary(null);
+        setLoadedFor("");
         setError(null);
       });
       return () => {
@@ -90,12 +92,14 @@ export function useTeamMemberKpi({
         const res = await getTeamMemberKpi(employeeId, periodId);
         if (!alive) return;
         setSummary(res.summary);
+        setLoadedFor(`${employeeId}:${periodId}`);
       } catch (err) {
         if (!alive) return;
         setError(
           getApiErrorMessage(err, "Failed to load this member’s KPIs")
         );
         setSummary(null);
+        setLoadedFor("");
       } finally {
         if (alive) setLoading(false);
       }
@@ -108,5 +112,5 @@ export function useTeamMemberKpi({
 
   const refetch = useCallback(() => setReloadTick((n) => n + 1), []);
 
-  return { summary, loading, error, refetch };
+  return { summary, loadedFor, loading, error, refetch };
 }
