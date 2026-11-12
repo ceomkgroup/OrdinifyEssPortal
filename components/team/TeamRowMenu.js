@@ -75,6 +75,8 @@ export function TeamRowMenu({ menuId, items = [] }) {
                   key={item.label}
                   type="button"
                   className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold hover:bg-[var(--panel-soft)] ${
+                    item.separated ? "border-t border-[var(--border)]" : ""
+                  } ${
                     item.tone === "danger"
                       ? "text-[var(--danger)] hover:bg-[var(--danger-soft)]"
                       : item.tone === "success"

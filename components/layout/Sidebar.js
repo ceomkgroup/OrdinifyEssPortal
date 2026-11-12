@@ -12,6 +12,7 @@ import {
   Inbox,
   FileStack,
   Laptop,
+  ListTodo,
   Receipt,
   Users,
   CalendarDays,
@@ -34,6 +35,7 @@ import { PAYSLIP_NAV } from "@/lib/payslip-nav";
 import { PROFILE_NAV } from "@/lib/profile-nav";
 import { REQUEST_TYPES } from "@/lib/request-types";
 import { SETTINGS_NAV } from "@/lib/settings-nav";
+import { TASK_NAV } from "@/lib/task-nav";
 import { TEAM_NAV } from "@/lib/team-nav";
 
 const SIDEBAR_W = "w-[256px]";
@@ -57,6 +59,7 @@ const NAV_GROUPS = [
       { href: "/assets", label: "Assets", icon: Laptop, childrenKey: "assets" },
       { href: "/payslip", label: "Payslip", icon: Receipt, childrenKey: "payslip" },
       { href: "/kpi", label: "KPI", icon: Target },
+      { href: "/tasks", label: "Tasks", icon: ListTodo, childrenKey: "tasks" },
     ],
   },
   {
@@ -87,6 +90,8 @@ function isChildActive(pathname, href) {
     href === "/profile" ||
     href === "/requests" ||
     href === "/team" ||
+    href === "/team/tasks" ||
+    href === "/tasks" ||
     href === "/settings";
   if (href === "/payslip") {
     return (
@@ -263,6 +268,11 @@ export function Sidebar({ open, onClose, collapsed, employee }) {
           icon: item.icon,
         })
       ),
+      tasks: TASK_NAV.map((item) => ({
+        href: item.href,
+        label: item.title,
+        icon: item.icon,
+      })),
       team: TEAM_NAV.map((item) => ({
         href: item.href,
         label: item.title,
@@ -304,6 +314,9 @@ export function Sidebar({ open, onClose, collapsed, employee }) {
     }
     if (item.childrenKey === "payslip") {
       return childrenByKey.payslip.length > 0 || canAccessRoute("/payslip");
+    }
+    if (item.childrenKey === "tasks") {
+      return childrenByKey.tasks.length > 0;
     }
     if (item.childrenKey === "team") {
       if (teamLoading) return false;
@@ -348,6 +361,7 @@ export function Sidebar({ open, onClose, collapsed, employee }) {
       if (pathname.startsWith("/documents")) next.documents = true;
       if (pathname.startsWith("/assets")) next.assets = true;
       if (pathname.startsWith("/payslip")) next.payslip = true;
+      if (pathname.startsWith("/tasks")) next.tasks = true;
       if (pathname.startsWith("/team")) next.team = true;
       if (pathname.startsWith("/settings")) next.settings = true;
       setOpenKeys((prev) => ({ ...prev, ...next }));
